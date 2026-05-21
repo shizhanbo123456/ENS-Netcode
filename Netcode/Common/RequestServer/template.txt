@@ -1,0 +1,50 @@
+using System;
+
+namespace Ens.Request
+{
+    namespace Client
+    {
+        public class CreateRoom:RequestClient
+        {
+            public override string Header => "R0";
+
+            public static Action OnRecvReply;
+            public static Action OnTimeOut;
+            public static Action<int> OnError;
+
+            private static CreateRoom Instance;
+            public CreateRoom():base()
+            {
+                Instance = this;
+                EnsClientRequst.RegistRequest(this);
+            }
+            public static void SendRequest()//提供静态方法用于调用
+            {
+                Instance.SendRequest("empty");
+            }
+            protected override void Error(int code)
+            {
+                OnError?.Invoke(code);
+            }
+            protected override void HandleReply(string data)
+            {
+                OnRecvReply?.Invoke();
+            }
+            public override void TimeOut()
+            {
+                OnTimeOut?.Invoke();
+            }
+        }
+    }
+    namespace Server
+    {
+        public class CreateRoom:RequestServer
+        {
+            public override string Header => "R0";
+            public override string HandleRequest(EnsConnection conn, string data)
+            {
+                return "empty";
+            }
+        }
+    }
+}

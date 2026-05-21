@@ -1,0 +1,75 @@
+每次会把下列各语句合并，并用*分隔，一起发送
+
+(byte messageHeader)(ushort delivery)[body](2byte messageLength)
+messageLength有特殊编码
+messageType和messageLength都必定不包含Separator
+
+
+Body部分消息结构
+
+E:
+>>客户端接收                事件
+(byte eventId)[short clientId]                                 //eventId    ==1 OnClientConnect  ==2 OnClientDisconnect
+                                                                            ==3 OnServerConnect  ==4 OnServerDisconnect
+                                                      //[E]3在C事件触发，[E]4在ShutDowm触发(超时/D事件/主动调用)
+
+C:
+>>客户端接收                分配Id
+(int Clientid)
+
+A:
+>>服务器接收
+(int clientId)         设置房主权限
+
+>>客户端接收
+(bool authorityActive)
+
+
+F:
+>>服务器接收                函数调用
+(short NOMObjectId)(byte func)[string param](short target)
+
+>>客户端接收                函数调用
+(short NOMObjectId)(byte func)[string param]
+
+
+f:
+>>服务器接收                创建物体
+(short sendto)(bool false)(short collectionId)(string param)(short behaviourCount)(short target)
+(short sendto)(bool true)(short collectionId)(string param)(short idStart)(short target)
+
+>>客户端接收                创建物体
+(bool false)(short collectionId)(string param)(short idStart)
+(bool true)(short collectionId)(string param)(short idStart)
+
+
+H:
+>>服务器接收                心跳检测
+(int millisecondInServerMsg)
+
+>>客户端接收                心跳检测
+(int serverMillisecond)(int delay)
+
+D
+>>服务器接收
+  //无消息体，断开连接
+
+>>客户端接收
+ //无消息体，断开连接
+
+
+R:
+>>客户端接收
+ //无消息体，离开房间，重置
+
+
+Q:
+>>服务器接收
+(string header)(string content)
+
+>>客户端接收
+(string header)(string content)
+
+
+>>广播
+,key1:value1,key2:value2,
