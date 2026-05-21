@@ -13,25 +13,28 @@ public class EnsRoomManager
 
     internal EnsRoomManager()
     {
-        RoomId = 10000;
+        RoomId = roomIdStart;
         Instance = this;
     }
 
-    internal bool CreateRoom(EnsConnection conn,out int code)
+    internal virtual bool CreateRoom(EnsConnection conn,out int code)
     {
         if (conn.room != null)
         {
             code = 0;
             return false;
         }
-        rooms.Add(RoomId,new EnsRoom(RoomId));
+        rooms.Add(RoomId,
+            EnsServer.RoomFactory==null?
+            new EnsRoom(RoomId):
+            EnsServer.RoomFactory.Invoke(RoomId));
         rooms[RoomId].Join(conn);
         RoomId += 1;
         code= conn.room.RoomId;
         if (PrintRoomData) Debug.Log(ToString());
         return true;
     }
-    internal bool JoinRoom(EnsConnection conn, int id,out int code)
+    internal virtual bool JoinRoom(EnsConnection conn, int id,out int code)
     {
         if (conn.room != null)
         {
@@ -50,7 +53,7 @@ public class EnsRoomManager
         if (PrintRoomData) Debug.Log(ToString());
         return true;
     }
-    internal bool ExitRoom(EnsConnection conn,out int id)
+    internal virtual bool ExitRoom(EnsConnection conn,out int id)
     {
         if (conn.room == null)
         {
@@ -62,12 +65,57 @@ public class EnsRoomManager
         if (PrintRoomData) Debug.Log(ToString());
         return true;
     }
-    public void ShutDown()
+    internal virtual void RecvEvent(int type,string content)
+    {
+
+    }
+    public virtual void ShutDown()
     {
         foreach (var i in rooms.Values.ToList()) i.ShutDown();
         rooms.Clear();
         Instance = null;
         rooms = null;
+    }
+    internal virtual void Update()
+    {
+
+    }
+    protected static void TrigClientEvent(Delivery delivery, int header, string content)
+    {
+        if (EnsInstance.Corr != null && EnsInstance.Corr.Client != null)
+        {
+            Writer.instance.t_type = header;
+            Writer.instance.t_content = content;
+            EnsInstance.Corr.Client.Send(Header.M, delivery, Writer.instance);
+        }
+        else
+        {
+            Utils.Debug.LogError("当前状态不能发送消息");
+        }
+    }
+    private class Writer : MessageWriter
+    {
+        internal static Writer instance = new();
+        internal int t_type;
+        internal string t_content;
+
+        public int GetLength()
+        {
+            return sizeof(int) + StringSerializer.GetLength(t_content);
+        }
+        public bool Write(SendBuffer b)
+        {
+            return IntSerializer.Serialize(t_type, b.bytes, ref b.indexStart) &&
+                StringSerializer.Serialize(t_content, b.bytes, ref b.indexStart);
+        }
+        public MessageWriter Clone()
+        {
+            return new Writer() { t_type = t_type, t_content = t_content };
+        }
+        public void Dispose()
+        {
+
+        }
     }
     public override string ToString()
     {

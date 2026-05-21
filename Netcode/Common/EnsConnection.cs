@@ -87,6 +87,10 @@ public class EnsConnection:DataTransportBase
     internal override void ShutDown()
     {
         if (Connection==null||Connection.Cancelled) return;
+        if (room != null)
+        {
+            EnsRoomManager.Instance.ExitRoom(this, out int _);
+        }
         OnShutDown?.Invoke(this);
         Send(Header.D,Delivery.Unreliable);
         Connection.SendBuffer.Flush();

@@ -6,6 +6,8 @@ public static class Header
     public const byte E = 69;
     public const byte F = 70;
     public const byte H = 72;
+    public const byte M = 77;
+    public const byte N = 78;
     public const byte Q = 81;
     public const byte R = 82;
     public const byte f = 102;

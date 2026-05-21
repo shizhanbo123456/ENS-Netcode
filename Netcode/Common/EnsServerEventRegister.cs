@@ -239,4 +239,27 @@ public class EnsServerEventRegister
             conn.Send(Header.Q, Delivery.Reliable, Q_MessageWriter.instance);
         });
     }
+    protected static void Client_M()
+    {
+        MessageHandlerServer.Regist(Header.M, (conn,b, s) =>
+        {
+            int index = MessageReader.BodyIndexStart(s);
+            int invalidIndex = MessageReader.BodyIndexInvalid(s);
+            int header = IntSerializer.Deserialize(b, ref index, invalidIndex);
+            string content = StringSerializer.Deserialize(b, ref index, invalidIndex);
+            EnsRoomManager.Instance.RecvEvent(header, content);
+        });
+    }
+    protected static void Client_N()
+    {
+        MessageHandlerServer.Regist(Header.N,(conn,b, s) =>
+        {
+            if (conn.room == null) return;
+            int index = MessageReader.BodyIndexStart(s);
+            int invalidIndex = MessageReader.BodyIndexInvalid(s);
+            int header = IntSerializer.Deserialize(b, ref index, invalidIndex);
+            string content = StringSerializer.Deserialize(b, ref index, invalidIndex);
+            conn.room.RecvEvent(header, content);
+        });
+    }
 }

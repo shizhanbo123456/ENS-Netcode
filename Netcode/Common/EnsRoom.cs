@@ -39,7 +39,7 @@ public class EnsRoom
     {
         RoomId = id;
     }
-    internal void Join(EnsConnection conn)
+    internal virtual void Join(EnsConnection conn)
     {
         ClientConnections.Add(conn.ClientId,conn);
         conn.room = this;
@@ -80,7 +80,7 @@ public class EnsRoom
 
         }
     }
-    internal void Exit(EnsConnection conn)
+    internal virtual void Exit(EnsConnection conn)
     {
         ClientConnections.Remove(conn.ClientId);
         conn.room = null;
@@ -119,7 +119,7 @@ public class EnsRoom
 
         }
     }
-    internal void SetAuthority(short clientId)
+    internal virtual void SetAuthority(short clientId)
     {
         if (!ClientConnections.ContainsKey(clientId)) return;
         if (ClientConnections.ContainsKey(CurrentAuthorityAt))
@@ -151,14 +151,58 @@ public class EnsRoom
             conn.Send(messageType, delivery, writer);
         }
     }
+    internal virtual void RecvEvent(int type, string content)
+    {
 
-    internal void ShutDown()
+    }
+    internal virtual void ShutDown()
     {
         Broadcast(Header.R, Delivery.Reliable, null);
         EnsRoomManager.Instance.rooms.Remove(RoomId);
         foreach (var i in ClientConnections.Values) i.room = null;
         ClientConnections.Clear();
         ClientConnections = null;
+    }
+    internal virtual void Update()
+    {
+
+    }
+    public static void TrigClientEvent(Delivery delivery, int header, string content)
+    {
+        if (EnsInstance.Corr != null && EnsInstance.Corr.Client != null)
+        {
+            Writer.instance.t_type = header;
+            Writer.instance.t_content = content;
+            EnsInstance.Corr.Client.Send(Header.N, delivery, Writer.instance);
+        }
+        else
+        {
+            Utils.Debug.LogError("当前状态不能发送消息");
+        }
+    }
+    internal class Writer : MessageWriter
+    {
+        internal static Writer instance = new();
+        internal int t_type;
+        internal string t_content;
+
+        public int GetLength()
+        {
+            return sizeof(int) + StringSerializer.GetLength(t_content);
+        }
+        public bool Write(SendBuffer b)
+        {
+            return IntSerializer.Serialize(t_type, b.bytes, ref b.indexStart) &&
+                StringSerializer.Serialize(t_content, b.bytes, ref b.indexStart);
+        }
+        public MessageWriter Clone()
+        {
+            return new Writer() { t_type = t_type, t_content = t_content };
+        }
+        public void Dispose()
+        {
+
+        }
     }
     public override string ToString()
     {

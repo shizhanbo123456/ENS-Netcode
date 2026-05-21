@@ -8,6 +8,9 @@ public class EnsServer
 {
     internal static EnsServer Instance;
 
+    public static Func<EnsRoomManager> RoomManagerFactory;
+    public static Func<int,EnsRoom> RoomFactory;
+
     internal Dictionary<int, EnsConnection> ClientConnections;
     private static CircularQueue<int>ToRemove= new CircularQueue<int>(10);
     internal EnsRoomManager RoomManager;
@@ -25,7 +28,9 @@ public class EnsServer
         Protocol.OnRecvConnection = conn => OnRecvConnection(conn);
 
         Listener = Protocol.GetListener(ip, port);
-        RoomManager = new EnsRoomManager();
+        RoomManager =RoomManagerFactory==null? 
+            new EnsRoomManager():
+            RoomManagerFactory.Invoke();
         On = true;
     }
     internal virtual void OnRecvConnection(ProtocolBase conn)
@@ -59,6 +64,9 @@ public class EnsServer
     }
     internal void Update()
     {
+        RoomManager.Update();
+        foreach (var r in RoomManager.rooms) r.Value.Update();
+
         foreach (var kvp in ClientConnections)
         {
             var i=kvp.Value;

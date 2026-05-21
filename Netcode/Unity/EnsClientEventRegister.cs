@@ -17,6 +17,8 @@ public class EnsClientEventRegister
         Client_f();
         Client_Q();
         Client_R();
+        Client_M();
+        Client_N();
         Client_Any();
         RegistClientRequests();
 
@@ -138,20 +140,16 @@ public class EnsClientEventRegister
             }
         });
     }
-    private static bool t_spawnMode;
-    private static short t_spawnCollectionId;
-    private static string t_spawnParam;
-    private static short t_spawnIdStart;
     protected static void Client_f()
     {
         MessageHandlerClient.Regist(Header.f,(b, s) =>
         {
             int indexStart = MessageReader.BodyIndexStart(s);
             int invalidIndex = MessageReader.BodyIndexInvalid(s);
-            t_spawnMode = BoolSerializer.Deserialize(b, ref indexStart, invalidIndex);
-            t_spawnCollectionId = ShortSerializer.Deserialize(b, ref indexStart, invalidIndex);
-            t_spawnParam = StringSerializer.Deserialize(b, ref indexStart, invalidIndex);
-            t_spawnIdStart = ShortSerializer.Deserialize(b, ref indexStart, invalidIndex);
+            bool t_spawnMode = BoolSerializer.Deserialize(b, ref indexStart, invalidIndex);
+            short t_spawnCollectionId = ShortSerializer.Deserialize(b, ref indexStart, invalidIndex);
+            string t_spawnParam = StringSerializer.Deserialize(b, ref indexStart, invalidIndex);
+            short t_spawnIdStart = ShortSerializer.Deserialize(b, ref indexStart, invalidIndex);
             if(t_spawnMode)EnsInstance.EnsSpawner.RespawnCheckLocal(t_spawnCollectionId,t_spawnParam,t_spawnIdStart);
             else EnsInstance.EnsSpawner.CreateLocal(t_spawnCollectionId,t_spawnParam,t_spawnIdStart);
         });
@@ -172,6 +170,28 @@ public class EnsClientEventRegister
         MessageHandlerClient.Regist(Header.R, (b,s) =>
         {
             Ens.Request.Client.ExitRoom.OnRecvReply?.Invoke();
+        });
+    }
+    protected static void Client_M()
+    {
+        MessageHandlerClient.Regist(Header.M, (b, s) =>
+        {
+            int index = MessageReader.BodyIndexStart(s);
+            int invalidIndex = MessageReader.BodyIndexInvalid(s);
+            int header = IntSerializer.Deserialize(b, ref index, invalidIndex);
+            string content = StringSerializer.Deserialize(b, ref index, invalidIndex);
+            ClientRoomManagerEventCenter.TrigEvent(header, content);
+        });
+    }
+    protected static void Client_N()
+    {
+        MessageHandlerClient.Regist(Header.N, (b, s) =>
+        {
+            int index = MessageReader.BodyIndexStart(s);
+            int invalidIndex = MessageReader.BodyIndexInvalid(s);
+            int header = IntSerializer.Deserialize(b, ref index, invalidIndex);
+            string content = StringSerializer.Deserialize(b, ref index, invalidIndex);
+            ClientRoomEventCenter.TrigEvent(header, content);
         });
     }
 

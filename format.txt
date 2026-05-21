@@ -71,5 +71,21 @@ Q:
 (string header)(string content)
 
 
+M:
+>>服务器接收
+(int type)(bytes content)
+
+>>客户端接收
+(int type)(bytes content)
+
+
+N:
+>>服务器接收
+(int type)(string content)
+
+>>客户端接收
+(int type)(string content)
+
+
 >>广播
 ,key1:value1,key2:value2,
