@@ -12,9 +12,9 @@ public class EnsRoom
             return null;
         }
     }
-    private Dictionary<int,EnsConnection> ClientConnections =new Dictionary<int, EnsConnection>();
+    protected Dictionary<int,EnsConnection> ClientConnections =new Dictionary<int, EnsConnection>();
     public int RoomId;
-    internal short CurrentAuthorityAt = -1;
+    internal protected short CurrentAuthorityAt = -1;
 
     public Dictionary<string, (char, int)> Rule = new Dictionary<string, (char, int)>();
     public Dictionary<string,string>Info= new Dictionary<string, string>();
@@ -35,11 +35,11 @@ public class EnsRoom
     }
 
     private EnsRoom() { }
-    internal EnsRoom(int id)
+    public EnsRoom(int id)
     {
         RoomId = id;
     }
-    internal virtual void Join(EnsConnection conn)
+    public virtual void Join(EnsConnection conn)
     {
         ClientConnections.Add(conn.ClientId,conn);
         conn.room = this;
@@ -58,10 +58,10 @@ public class EnsRoom
             conn.Send(Header.A, Delivery.Reliable, BoolWriter.instance);
         }
     }
-    private class BoolWriter : MessageWriter
+    protected class BoolWriter : MessageWriter
     {
-        internal static BoolWriter instance=new();
-        internal bool target;
+        public static BoolWriter instance=new();
+        public bool target;
 
         public int GetLength()
         {
@@ -80,7 +80,7 @@ public class EnsRoom
 
         }
     }
-    internal virtual void Exit(EnsConnection conn)
+    public virtual void Exit(EnsConnection conn)
     {
         ClientConnections.Remove(conn.ClientId);
         conn.room = null;
@@ -95,11 +95,11 @@ public class EnsRoom
             Broadcast(conn.ClientId, Header.E, Delivery.Reliable,E_EventMessageWriter.instance);
         }
     }
-    private class E_EventMessageWriter:MessageWriter
+    protected class E_EventMessageWriter:MessageWriter
     {
-        internal static E_EventMessageWriter instance=new();
-        internal byte b;
-        internal short connId;
+        public static E_EventMessageWriter instance=new();
+        public byte b;
+        public short connId;
 
         public int GetLength()
         {
@@ -119,7 +119,7 @@ public class EnsRoom
 
         }
     }
-    internal virtual void SetAuthority(short clientId)
+    public virtual void SetAuthority(short clientId)
     {
         if (!ClientConnections.ContainsKey(clientId)) return;
         if (ClientConnections.ContainsKey(CurrentAuthorityAt))
@@ -133,29 +133,32 @@ public class EnsRoom
         BoolWriter.instance.target = true;
         c.Send(Header.A, Delivery.Reliable, BoolWriter.instance);
     }
-
-    internal void Broadcast(byte messageType,Delivery delivery, MessageWriter writer = null)
+    protected void ConnectionSend(EnsConnection conn,byte messageType, Delivery delivery, MessageWriter writer = null)
+    {
+        conn.Send(messageType, delivery, writer);
+    }
+    internal protected void Broadcast(byte messageType,Delivery delivery, MessageWriter writer = null)
     {
         foreach (var i in ClientConnections.Values) i.Send(messageType,delivery,writer);
     }
-    internal void Broadcast(int ignore, byte messageType, Delivery delivery, MessageWriter writer = null)
+    internal protected void Broadcast(int ignore, byte messageType, Delivery delivery, MessageWriter writer = null)
     {
         foreach (var i in ClientConnections.Values) 
             if (i.ClientId != ignore) 
                 i.Send(messageType, delivery, writer);
     }
-    internal void PTP(short id, byte messageType,  Delivery delivery, MessageWriter writer = null)
+    internal protected void PTP(short id, byte messageType,  Delivery delivery, MessageWriter writer = null)
     {
         if(ClientConnections.TryGetValue(id, out var conn))
         {
             conn.Send(messageType, delivery, writer);
         }
     }
-    internal virtual void RecvEvent(int type, string content)
+    public virtual void RecvEvent(int type, string content)
     {
 
     }
-    internal virtual void ShutDown()
+    public virtual void ShutDown()
     {
         Broadcast(Header.R, Delivery.Reliable, null);
         EnsRoomManager.Instance.rooms.Remove(RoomId);
@@ -163,7 +166,7 @@ public class EnsRoom
         ClientConnections.Clear();
         ClientConnections = null;
     }
-    internal virtual void Update()
+    public virtual void Update()
     {
 
     }

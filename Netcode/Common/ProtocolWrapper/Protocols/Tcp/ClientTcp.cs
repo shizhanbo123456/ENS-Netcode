@@ -34,7 +34,7 @@ namespace ProtocolWrapper.Protocols.Tcp
             }
             catch
             {
-                ShutDown();
+                MarkTransportClosed();
                 return;
             }
 
@@ -54,7 +54,7 @@ namespace ProtocolWrapper.Protocols.Tcp
             }
             catch
             {
-                ShutDown();
+                MarkTransportClosed();
                 return;
             }
 

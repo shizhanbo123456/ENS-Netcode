@@ -4,20 +4,21 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// ÓÃÓÚÔÚ·şÎñÆ÷¶ËÒ²Æô¶¯Ò»¸ö¿Í»§¶Ë<br></br>
-/// º¯Êıµ÷ÓÃ¹æÔòÓëENCConnectionÒ»ÖÂ
+/// ç”¨äºåœ¨æœåŠ¡å™¨ç«¯ä¹Ÿå¯åŠ¨ä¸€ä¸ªå®¢æˆ·ç«¯<br></br>
+/// å‡½æ•°è°ƒç”¨è§„åˆ™ä¸ENCConnectionä¸€è‡´
 /// </summary>
 internal class EnsHost : EnsConnection
 {
     internal CircularQueue<byte[]> ReceivedData;
     private ENCLocalClient _client;
     private SendBuffer _buffer;
+    private bool shutdownStarted;
 
     internal static void Create(out EnsHost host,out ENCLocalClient client)
     {
         if (EnsInstance.Corr.Client != null)
         {
-            Debug.LogError("[E]¿Í»§¶ËÒÑ¾­Æô¶¯");
+            Debug.LogError("[E]å®¢æˆ·ç«¯å·²ç»å¯åŠ¨");
             host = null;
             client = null;
             return;
@@ -39,6 +40,7 @@ internal class EnsHost : EnsConnection
     }
     internal override void Send(byte messageType, Delivery delivery, MessageWriter writer = null)
     {
+        if (!_on || _buffer == null || DeliverySource == null) return;
         Send(_buffer, messageType,DeliverySource.DeliveryToId(delivery), writer);
     }
     private void OnSend(byte[] bytes,int length)
@@ -75,11 +77,16 @@ internal class EnsHost : EnsConnection
     }
     internal override void ShutDown()
     {
+        if (shutdownStarted) return;
+        shutdownStarted = true;
         _on = false;
+        while (ReceivedData != null && ReceivedData.Read(out var data))
+            BytesPool.ReturnBuffer(data);
+        _buffer?.Dispose();
         ReceivedData= null;
         _client = null;
         _buffer = null;
-        DeliverySource.Return(DeliverySource);
+        if (DeliverySource != null) DeliverySource.Return(DeliverySource);
         DeliverySource = null;
     }
 }

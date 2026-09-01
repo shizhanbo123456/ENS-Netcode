@@ -21,7 +21,9 @@ namespace ProtocolWrapper
         internal static int id = 0;
 
         internal static Action<ProtocolBase> OnRecvConnection;
-        internal static Action OnClientInitialized;
+        // 保留给自定义传输的兼容通知；ENS 核心通过主线程轮询 Initialized，
+        // 不再依赖该回调执行关键初始化。
+        internal static Action OnClientInitialized = delegate { };
 
         public static ConcurrentType mode=ConcurrentType.Multithreading;
         public static ProtocolType defaultProtocol;

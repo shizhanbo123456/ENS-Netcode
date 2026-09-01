@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Utils;
+using System.Threading;
 
 namespace ProtocolWrapper
 {
@@ -14,8 +15,14 @@ namespace ProtocolWrapper
         /// </summary>
         public CircularQueue<byte[]> ReceiveBuffer;
 
-        public bool Initialized = false;
-        public bool Cancelled = false;
+        public volatile bool Initialized = false;
+        public volatile bool Cancelled = false;
+        private int transportClosed;
+        /// <summary>
+        /// 由传输线程记录，由 ENS 主线程读取并执行上层断联清理。
+        /// UDP 等无法直接检测远端关闭的传输可保持默认值。
+        /// </summary>
+        public bool TransportClosed => Volatile.Read(ref transportClosed) != 0;
         public bool On
         {
             get
@@ -46,6 +53,11 @@ namespace ProtocolWrapper
         public virtual void ShutDown()
         {
             Cancelled = true;
+        }
+
+        protected void MarkTransportClosed()
+        {
+            Volatile.Write(ref transportClosed, 1);
         }
 
 

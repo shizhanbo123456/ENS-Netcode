@@ -7,17 +7,17 @@ public class EnsRoomManager
     public const int roomIdStart = 10000;
     public static EnsRoomManager Instance;
     public SortedDictionary<int,EnsRoom> rooms = new SortedDictionary<int, EnsRoom>();
-    private int RoomId;
+    protected int RoomId;
 
     public static bool PrintRoomData=false;
 
-    internal EnsRoomManager()
+    public EnsRoomManager()
     {
         RoomId = roomIdStart;
         Instance = this;
     }
 
-    internal virtual bool CreateRoom(EnsConnection conn,out int code)
+    public virtual bool CreateRoom(EnsConnection conn,out int code)
     {
         if (conn.room != null)
         {
@@ -34,7 +34,7 @@ public class EnsRoomManager
         if (PrintRoomData) Debug.Log(ToString());
         return true;
     }
-    internal virtual bool JoinRoom(EnsConnection conn, int id,out int code)
+    public virtual bool JoinRoom(EnsConnection conn, int id,out int code)
     {
         if (conn.room != null)
         {
@@ -53,7 +53,7 @@ public class EnsRoomManager
         if (PrintRoomData) Debug.Log(ToString());
         return true;
     }
-    internal virtual bool ExitRoom(EnsConnection conn,out int id)
+    public virtual bool ExitRoom(EnsConnection conn,out int id)
     {
         if (conn.room == null)
         {
@@ -65,7 +65,7 @@ public class EnsRoomManager
         if (PrintRoomData) Debug.Log(ToString());
         return true;
     }
-    internal virtual void RecvEvent(int type,string content)
+    public virtual void RecvEvent(EnsConnection conn,int type,string content)
     {
 
     }
@@ -76,17 +76,17 @@ public class EnsRoomManager
         Instance = null;
         rooms = null;
     }
-    internal virtual void Update()
+    public virtual void Update()
     {
 
     }
-    protected static void TrigClientEvent(Delivery delivery, int header, string content)
+    protected static void TrigClientEvent(EnsConnection conn, Delivery delivery, int header, string content)
     {
         if (EnsInstance.Corr != null && EnsInstance.Corr.Client != null)
         {
             Writer.instance.t_type = header;
             Writer.instance.t_content = content;
-            EnsInstance.Corr.Client.Send(Header.M, delivery, Writer.instance);
+            conn.Send(Header.M, delivery, Writer.instance);
         }
         else
         {

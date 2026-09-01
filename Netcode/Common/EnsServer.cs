@@ -13,6 +13,8 @@ public class EnsServer
 
     internal Dictionary<int, EnsConnection> ClientConnections;
     private static CircularQueue<int>ToRemove= new CircularQueue<int>(10);
+    private readonly CircularQueue<ProtocolBase> PendingConnections = new CircularQueue<ProtocolBase>(10);
+    private readonly Action<ProtocolBase> connectionReceiver;
     internal EnsRoomManager RoomManager;
     internal ListenerBase Listener;
 
@@ -25,7 +27,13 @@ public class EnsServer
         Instance = this;
 
         ClientConnections = new Dictionary<int, EnsConnection>();
-        Protocol.OnRecvConnection = conn => OnRecvConnection(conn);
+        // 自定义传输即使从工作线程报告连接，也只会在这里记录；
+        // EnsConnection 和 ClientConnections 始终由主循环创建、修改。
+        connectionReceiver = conn =>
+        {
+            if (conn != null) PendingConnections.Write(conn);
+        };
+        Protocol.OnRecvConnection = connectionReceiver;
 
         Listener = Protocol.GetListener(ip, port);
         RoomManager =RoomManagerFactory==null? 
@@ -48,6 +56,19 @@ public class EnsServer
         EnsConnection connection = new EnsConnection(conn, index,OnConnectionShutDown);
         ClientConnections.Add(index, connection);
     }
+    private void AcceptPendingConnections()
+    {
+        while (PendingConnections.Read(out var connection))
+        {
+            if (!On)
+            {
+                connection.ShutDown();
+                connection.Dispose();
+                continue;
+            }
+            OnRecvConnection(connection);
+        }
+    }
     internal void OnConnectionShutDown(EnsConnection conn)
     {
         if (!On) return;
@@ -64,6 +85,8 @@ public class EnsServer
     }
     internal void Update()
     {
+        Listener.Update();
+        AcceptPendingConnections();
         RoomManager.Update();
         foreach (var r in RoomManager.rooms) r.Value.Update();
 
@@ -127,6 +150,9 @@ public class EnsServer
         EndListening();
         Listener.ShutDown();
         Listener.Dispose();
+        if (Protocol.OnRecvConnection == connectionReceiver)
+            Protocol.OnRecvConnection = null;
+        AcceptPendingConnections();
         RoomManager.ShutDown();
         foreach (var i in ClientConnections.Values) i.ShutDown();
         ClientConnections.Clear();

@@ -3,20 +3,21 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// ������ʹ�ã����ڼ򻯺Ϳͻ��˵�ͨ��
+/// 服务器使用，用于简化和客户端的通信
 /// </summary>
 public class EnsConnection:DataTransportBase
 {
-    internal short ClientId;
+    public short ClientId;
     private KeyLibrary KeyLibrary;
     private ProtocolBase Connection;
-    internal EnsRoom room;
+    public EnsRoom room;
 
     private Action<EnsConnection> OnShutDown;
 
     internal int delay = 20;//20ms
 
     protected bool _on;
+    private bool shutdownStarted;
 
     protected EnsConnection() { }
     internal EnsConnection(ProtocolBase _base,short index,Action<EnsConnection>onShutDown)
@@ -37,7 +38,7 @@ public class EnsConnection:DataTransportBase
         internal short currentClientId;
         public int GetLength()
         {
-            return sizeof(short); // �ȼ� return 2;
+            return sizeof(short); // 等价 return 2;
         }
         public bool Write(SendBuffer buffer)
         {
@@ -54,10 +55,17 @@ public class EnsConnection:DataTransportBase
     }
     internal override void Send(byte messageType, Delivery delivery, MessageWriter writer = null)
     {
+        if (!_on || KeyLibrary == null) return;
         KeyLibrary.OnSend(messageType,delivery,writer);
     }
     internal override void Update()
     {
+        if (Connection == null) return;
+        if (Connection.TransportClosed)
+        {
+            ShutDown();
+            return;
+        }
         var buffer=Connection.ReceiveBuffer;
         while (buffer.Read(out var data)&&_on)
         {
@@ -82,24 +90,37 @@ public class EnsConnection:DataTransportBase
     }
     internal override void FlushSendBuffer()
     {
-        Connection.SendBuffer.Flush();
+        Connection?.SendBuffer?.Flush();
     }
     internal override void ShutDown()
     {
-        if (Connection==null||Connection.Cancelled) return;
+        if (shutdownStarted) return;
+        shutdownStarted = true;
+        _on = false;
+        var connection = Connection;
         if (room != null)
         {
             EnsRoomManager.Instance.ExitRoom(this, out int _);
         }
         OnShutDown?.Invoke(this);
-        Send(Header.D,Delivery.Unreliable);
-        Connection.SendBuffer.Flush();
-
-        _on = false;
+        try
+        {
+            if (connection != null && connection.Initialized && !connection.Cancelled)
+            {
+                // _on 已关闭，直接调用底层封包方法发送最后一个断联通知。
+                DataTransportBase.Send(connection.SendBuffer, Header.D,
+                    DeliverySource.DeliveryToId(Delivery.Unreliable));
+                connection.SendBuffer.Flush();
+            }
+        }
+        catch (Exception e)
+        {
+            Utils.Debug.ErrorCaught(e);
+        }
+        KeyLibrary?.Clear();
         base.ShutDown();
-        KeyLibrary.Clear();
-        Connection.ShutDown();
-        Connection?.Dispose();
+        connection?.ShutDown();
+        connection?.Dispose();
         Connection = null;
         KeyLibrary = null;
         room = null;

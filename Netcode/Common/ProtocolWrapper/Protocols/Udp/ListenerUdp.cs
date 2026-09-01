@@ -11,13 +11,16 @@ using Utils;
 namespace ProtocolWrapper.Protocols.Udp
 {
     /// <summary>
-    /// ��Ҫ����StartListening/EndListening<br></br>
+    /// 需要调用StartListening/EndListening<br></br>
     /// </summary>
     internal class ListenerUdp : ListenerBase
     {
         public UdpClient client;
 
         public Dictionary<IPEndPoint,ConnectionUdp>Connections=new Dictionary<IPEndPoint, ConnectionUdp>();
+        private readonly CircularQueue<(byte[] data, IPEndPoint endPoint)> PendingDatagrams =
+            new CircularQueue<(byte[] data, IPEndPoint endPoint)>(20);
+        private bool receiveLoopStarted;
 
         public ListenerUdp(IPAddress ip,int port):base(ip,port)
         {
@@ -26,7 +29,9 @@ namespace ProtocolWrapper.Protocols.Udp
         }
         public override void StartListening()
         {
-            Listening = true; 
+            Listening = true;
+            if (receiveLoopStarted) return;
+            receiveLoopStarted = true;
             if (Protocol.mode == ConcurrentType.Multithreading)
             {
                 Thread t = new Thread(new ThreadStart(Recv));
@@ -52,44 +57,44 @@ namespace ProtocolWrapper.Protocols.Udp
                 {
                     var b = client.Receive(ref remoteEp);
                     if (Cancelled) return;
-                    OnRecvData(b, remoteEp);
+                    if (Listening) PendingDatagrams.Write((b, remoteEp));
                 }
                 catch
                 {
-                    
+                    if (Cancelled) return;
                 }
             }
         }
         public async Task RecvAsync()
         {
-            while (Listening)
+            while (!Cancelled)
             {
                 try
                 {
                     var r = await client.ReceiveAsync();
-                    if (!Listening) return;
-                    var b = r.Buffer;
-                    OnRecvData(b,r.RemoteEndPoint);
+                    if (Cancelled) return;
+                    if (Listening) PendingDatagrams.Write((r.Buffer, r.RemoteEndPoint));
                 }
                 catch
                 {
-
+                    if (Cancelled) return;
                 }
             }
         }
-        private void OnRecvData(byte[] b,IPEndPoint ep)
+        public override void Update()
         {
-            if (!Connections.ContainsKey(ep))
+            while (PendingDatagrams.Read(out var datagram))
             {
-                if (!Listening) return;
-                var c = new ConnectionUdp();
-                c.Init(this, ep);
-                Connections.Add(ep, c);
-                Protocol.OnRecvConnection?.Invoke(c);
+                if (!Listening || Cancelled) continue;
+                if (!Connections.TryGetValue(datagram.endPoint, out var connection))
+                {
+                    connection = new ConnectionUdp();
+                    connection.Init(this, datagram.endPoint);
+                    Connections.Add(datagram.endPoint, connection);
+                    Protocol.OnRecvConnection?.Invoke(connection);
+                }
+                if (!connection.Cancelled) connection.RecvBuffer.Write(datagram.data);
             }
-            var conn = Connections[ep];
-            if (!conn.Cancelled) conn.RecvBuffer.Write(b);
-            else return;
         }
 
 
@@ -97,7 +102,13 @@ namespace ProtocolWrapper.Protocols.Udp
         {
             if(Listening)EndListening();
             Cancelled = true;
-            foreach (var c in Connections.Keys)Connections[c].ShutDown();
+            client?.Close();
+            while (PendingDatagrams.Read(out _)) { }
+            // ConnectionUdp.ShutDown 会将自身从 Connections 中移除。
+            while (Connections.Count > 0)
+            {
+                Connections.First().Value.ShutDown();
+            }
         }
 
 

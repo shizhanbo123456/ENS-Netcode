@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -15,14 +15,16 @@ class RpcCodeGenerator
     [UnityEditor.MenuItem("Ens/GenerateCode")]
     public static void GenCode()
     {
+        UnityEngine.Debug.Log($"[ENS] GenerateCode start. Source={sourceDir}, Output={genDir}");
+        int generatedCount = 0;
         Directory.CreateDirectory(genDir);
         CleanGeneratedFiles(genDir);
 
-        // ÊÕ¼¯ËùÓĞÀàµÄĞÅÏ¢²¢¹¹½¨¼Ì³Ğ¹ØÏµ
+        // æ”¶é›†æ‰€æœ‰ç±»çš„ä¿¡æ¯å¹¶æ„å»ºç»§æ‰¿å…³ç³»
         var allClasses = new List<ClassDeclarationSyntax>();
         var classFullNames = new Dictionary<ClassDeclarationSyntax, string>();
 
-        // Ê×ÏÈÊÕ¼¯ËùÓĞÀà¼°ÆäÍêÕûÃû³Æ
+        // é¦–å…ˆæ”¶é›†æ‰€æœ‰ç±»åŠå…¶å®Œæ•´åç§°
         foreach (var file in Directory.EnumerateFiles(sourceDir, "*.cs", SearchOption.AllDirectories))
         {
             if (file.Contains("Generated")) continue;
@@ -44,10 +46,10 @@ class RpcCodeGenerator
             }
         }
 
-        // ¹¹½¨¼Ì³Ğ¹şÏ£±í£¨°üº¬Ö±½ÓºÍ¼ä½Ó¼Ì³ĞTestBehaviourµÄÀà£©
+        // æ„å»ºç»§æ‰¿å“ˆå¸Œè¡¨ï¼ˆåŒ…å«ç›´æ¥å’Œé—´æ¥ç»§æ‰¿TestBehaviourçš„ç±»ï¼‰
         var inheritedFromTestBehaviour = new HashSet<string>(StringComparer.Ordinal)
         {
-            nameof(EnsBehaviour) // ³õÊ¼¼ÓÈëÄ¿±ê»ùÀà
+            nameof(EnsBehaviour) // åˆå§‹åŠ å…¥ç›®æ ‡åŸºç±»
         };
 
         bool hasNewAdded;
@@ -60,7 +62,7 @@ class RpcCodeGenerator
                 if (inheritedFromTestBehaviour.Contains(fullName))
                     continue;
 
-                // ¼ì²éÀàµÄËùÓĞ»ùÀàÊÇ·ñÔÚ¹şÏ£±íÖĞ
+                // æ£€æŸ¥ç±»çš„æ‰€æœ‰åŸºç±»æ˜¯å¦åœ¨å“ˆå¸Œè¡¨ä¸­
                 if (cls.BaseList?.Types.Any(t =>
                     inheritedFromTestBehaviour.Contains(GetBaseTypeFullName(t.Type, classFullNames, allClasses))) ?? false)
                 {
@@ -68,36 +70,38 @@ class RpcCodeGenerator
                     hasNewAdded = true;
                 }
             }
-        } while (hasNewAdded); // Ñ­»·Ö±µ½Ã»ÓĞĞÂÀà¼ÓÈë
+        } while (hasNewAdded); // å¾ªç¯ç›´åˆ°æ²¡æœ‰æ–°ç±»åŠ å…¥
 
-        // ´¦Àí·ûºÏÌõ¼şµÄÀà
+        // å¤„ç†ç¬¦åˆæ¡ä»¶çš„ç±»
         foreach (var file in Directory.EnumerateFiles(sourceDir, "*.cs", SearchOption.AllDirectories))
         {
             if (file.Contains("Generated")) continue;
-            ProcessFile(file, genDir, inheritedFromTestBehaviour);
+            generatedCount += ProcessFile(file, genDir, inheritedFromTestBehaviour);
         }
 
         UnityEditor.AssetDatabase.Refresh();
+        UnityEngine.Debug.Log($"[ENS] GenerateCode finished. GeneratedFiles={generatedCount}, Output={genDir}");
     }
 
-    // »ñÈ¡»ùÀàµÄÍêÕûÃû³Æ
+    // è·å–åŸºç±»çš„å®Œæ•´åç§°
     private static string GetBaseTypeFullName(TypeSyntax baseType, Dictionary<ClassDeclarationSyntax, string> classFullNames, List<ClassDeclarationSyntax> allClasses)
     {
         var baseTypeName = baseType.ToString();
-        // ¼ì²éÊÇ·ñÊÇµ±Ç°´úÂë¿âÖĞµÄÀà
+        // æ£€æŸ¥æ˜¯å¦æ˜¯å½“å‰ä»£ç åº“ä¸­çš„ç±»
         var matchedClass = allClasses.FirstOrDefault(c => c.Identifier.Text == baseTypeName);
         return matchedClass != null ? classFullNames[matchedClass] : baseTypeName;
     }
 
-    static void ProcessFile(string sourcePath, string genDir, HashSet<string> targetBaseClasses)
+    static int ProcessFile(string sourcePath, string genDir, HashSet<string> targetBaseClasses)
     {
+        int generatedCount = 0;
         string code = File.ReadAllText(sourcePath);
         SyntaxTree tree = CSharpSyntaxTree.ParseText(code);
         var root = tree.GetRoot() as CompilationUnitSyntax;
 
         string currentNamespace = root.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? "";
 
-        // É¸Ñ¡¼Ì³Ğ×ÔÄ¿±ê»ùÀà£¨Ö±½Ó»ò¼ä½Ó£©ÇÒÊÇpartialµÄÀà
+        // ç­›é€‰ç»§æ‰¿è‡ªç›®æ ‡åŸºç±»ï¼ˆç›´æ¥æˆ–é—´æ¥ï¼‰ä¸”æ˜¯partialçš„ç±»
         var targetClasses = root.DescendantNodes()
             .OfType<ClassDeclarationSyntax>()
             .Where(c =>
@@ -109,36 +113,37 @@ class RpcCodeGenerator
             .Where(c =>
             {
                 var b = c.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword));
-                if (!b&& c.Identifier.Text!=nameof(EnsBehaviour)) //EnsBehaviour×÷Îª»ùÀà£¬±¾Éí²»ÒªÇópartial
-                    UnityEngine.Debug.LogWarning($"Àà {c.Identifier.Text} Ã»ÓĞÉùÃ÷Îªpartial£¬Ìø¹ıÉú³É´úÂë¡£");
+                if (!b&& c.Identifier.Text!=nameof(EnsBehaviour)) //EnsBehaviourä½œä¸ºåŸºç±»ï¼Œæœ¬èº«ä¸è¦æ±‚partial
+                    UnityEngine.Debug.LogWarning($"ç±» {c.Identifier.Text} æ²¡æœ‰å£°æ˜ä¸ºpartialï¼Œè·³è¿‡ç”Ÿæˆä»£ç ã€‚");
                 return b;
             })
             .ToList();
 
         foreach (var cls in targetClasses)
         {
-            GenerateCodeForClass(cls, sourcePath, genDir, root);
+            if (GenerateCodeForClass(cls, sourcePath, genDir, root)) generatedCount++;
         }
+        return generatedCount;
     }
 
-    static void GenerateCodeForClass(ClassDeclarationSyntax cls, string sourcePath, string genDir, CompilationUnitSyntax root)
+    static bool GenerateCodeForClass(ClassDeclarationSyntax cls, string sourcePath, string genDir, CompilationUnitSyntax root)
     {
         string className = cls.Identifier.Text;
         string @namespace = root.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? "";
 
-        // »ñÈ¡´øÓĞRpcÊôĞÔµÄ·½·¨£¨ÅÅ³ıÒÑÉú³ÉµÄ´úÂë£©
+        // è·å–å¸¦æœ‰Rpcå±æ€§çš„æ–¹æ³•ï¼ˆæ’é™¤å·²ç”Ÿæˆçš„ä»£ç ï¼‰
         var rpcMethods = cls.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
             .Where(m => m.AttributeLists.Any(a => a.Attributes.Any(attr => attr.Name.ToString() == "Rpc")))
             .Where(m => !m.AttributeLists.Any(a => a.ToString().Contains("GeneratedCode")))
             .ToList();
 
-        if (!rpcMethods.Any()) return;
+        if (!rpcMethods.Any()) return false;
 
-        // ÎªÃ¿¸ö·½·¨·ÖÅäÎ¨Ò»ID
+        // ä¸ºæ¯ä¸ªæ–¹æ³•åˆ†é…å”¯ä¸€ID
         var methodIdMap = rpcMethods.Select((m, i) => new { Method = m, Id = (byte)i }).ToDictionary(x => x.Method, x => x.Id);
 
-        // Éú³É´úÂë
+        // ç”Ÿæˆä»£ç 
         var codeBuilder = new StringBuilder();
         HashSet<string> requiredUsings = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -147,14 +152,14 @@ class RpcCodeGenerator
             "using UnityEngine;"
         };
 
-        // Ìí¼ÓÔ­ÎÄ¼şµÄusingÖ¸Áî
+        // æ·»åŠ åŸæ–‡ä»¶çš„usingæŒ‡ä»¤
         foreach (var usingDirective in root.Usings)
         {
             string usingStr = usingDirective.ToString().TrimEnd('\r', '\n');
             requiredUsings.Add(usingStr);
         }
 
-        // Ğ´ÈëusingÖ¸Áî
+        // å†™å…¥usingæŒ‡ä»¤
         foreach (var usingStr in requiredUsings)
         {
             codeBuilder.AppendLine(usingStr);
@@ -170,7 +175,7 @@ class RpcCodeGenerator
         codeBuilder.AppendLine($"public partial class {className} : {baseClassDeclaration}");
         codeBuilder.AppendLine("{");
 
-        // 1. Éú³ÉFuncRecorder×Öµä
+        // 1. ç”ŸæˆFuncRecorderå­—å…¸
         Dictionary<string, int> OverloadingCounter = new();
 
         codeBuilder.AppendLine($"    private static Dictionary<byte, Action<{className}, byte[]>> FuncRecorder = new()");
@@ -195,7 +200,7 @@ class RpcCodeGenerator
         codeBuilder.AppendLine("    };");
         codeBuilder.AppendLine();
 
-        // 2. Îª²»Í¬²ÎÊıÀàĞÍµÄ·½·¨Éú³É¶ÔÓ¦µÄÓ³ÉäºÍRpcInvoke·½·¨
+        // 2. ä¸ºä¸åŒå‚æ•°ç±»å‹çš„æ–¹æ³•ç”Ÿæˆå¯¹åº”çš„æ˜ å°„å’ŒRpcInvokeæ–¹æ³•
         var groupedMethods = rpcMethods.GroupBy(m => GetParameterTypeKey(m.ParameterList));
         foreach (var group in groupedMethods)
         {
@@ -205,14 +210,14 @@ class RpcCodeGenerator
             var paramTypes = parameters.Select(p => p.Type.ToString()).ToList();
             var paramNames = parameters.Select((p, i) => $"param{i + 1}").ToList();
 
-            // Éú³ÉÓ³Éä×Öµä
+            // ç”Ÿæˆæ˜ å°„å­—å…¸
             string actionType = parameters.Any()
                 ? $"Action<{string.Join(", ", paramTypes)}>"
                 : "Action";
             codeBuilder.AppendLine($"    private Dictionary<{actionType}, byte> map_{paramKey};");
             codeBuilder.AppendLine();
 
-            // Éú³ÉRpcInvoke·½·¨
+            // ç”ŸæˆRpcInvokeæ–¹æ³•
             bool parametersIsNotNull = parameters.Any();
             string parametersDeclaration = parametersIsNotNull
                 ? $", {string.Join(", ", parameters.Select(p => $"{p.Type} {paramNames[parameters.IndexOf(p)]}"))}"
@@ -228,15 +233,15 @@ class RpcCodeGenerator
             }
             codeBuilder.AppendLine("        };");
             codeBuilder.AppendLine();
-            codeBuilder.AppendLine($"        if (!map_{paramKey}.ContainsKey(func)) throw new Exception(\"Ä¿±êº¯ÊıÎ´×¢²á\");");
+            codeBuilder.AppendLine($"        if (!map_{paramKey}.ContainsKey(func)) throw new Exception(\"ç›®æ ‡å‡½æ•°æœªæ³¨å†Œ\");");
             codeBuilder.AppendLine();
 
-            //Ğ´Èë·½·¨id
+            //å†™å…¥æ–¹æ³•id
             codeBuilder.AppendLine("        EnsTemporaryBuffer.length=1;");
             codeBuilder.AppendLine($"        EnsTemporaryBuffer.bytes[0] = map_{paramKey}[func];");
             codeBuilder.AppendLine();
 
-            // ĞòÁĞ»¯²ÎÊı
+            // åºåˆ—åŒ–å‚æ•°
             for (int i = 0; i < parameters.Count; i++)
             {
                 string type = paramTypes[i];
@@ -250,7 +255,7 @@ class RpcCodeGenerator
         }
         OverloadingCounter.Clear();
 
-        // 3. Éú³É·½·¨·´ĞòÁĞ»¯µ÷ÓÃ
+        // 3. ç”Ÿæˆæ–¹æ³•ååºåˆ—åŒ–è°ƒç”¨
         foreach (var method in rpcMethods)
         {
             string methodName = method.Identifier.Text;
@@ -277,7 +282,7 @@ class RpcCodeGenerator
                 codeBuilder.AppendLine("        int invalidIndex = RpcInvokeSegment.StartIndex+RpcInvokeSegment.Length;");
             }
 
-            // ·´ĞòÁĞ»¯²ÎÊı
+            // ååºåˆ—åŒ–å‚æ•°
             for (int i = 0; i < parameters.Count; i++)
             {
                 string type = paramTypes[i];
@@ -285,13 +290,13 @@ class RpcCodeGenerator
                 codeBuilder.AppendLine($"        {type} {paramNames[i]} = {serializer}.Deserialize(bytes, ref indexStart,invalidIndex);");
             }
 
-            // µ÷ÓÃÔ­·½·¨
+            // è°ƒç”¨åŸæ–¹æ³•
             codeBuilder.AppendLine($"        {methodName}({string.Join(", ", paramNames)});");
             codeBuilder.AppendLine("    }");
             codeBuilder.AppendLine();
         }
 
-        // 4. Éú³ÉInvokeFunc·½·¨
+        // 4. ç”ŸæˆInvokeFuncæ–¹æ³•
         codeBuilder.AppendLine("    private static Segment RpcInvokeSegment;");
         codeBuilder.AppendLine("    public override bool InvokeFunc(byte[] bytes,Segment s)");
         codeBuilder.AppendLine("    {");
@@ -312,22 +317,23 @@ class RpcCodeGenerator
             codeBuilder.AppendLine("}");
         }
 
-        // Ğ´ÈëÉú³ÉµÄÎÄ¼ş
+        // å†™å…¥ç”Ÿæˆçš„æ–‡ä»¶
         string genFilePath = Path.Combine(genDir, $"{className}.Generated.cs");
         File.WriteAllText(genFilePath, codeBuilder.ToString());
-        Console.WriteLine($"Éú³É´úÂë: {genFilePath}");
+        UnityEngine.Debug.Log($"[ENS] ç”Ÿæˆä»£ç : {genFilePath}");
+        return true;
     }
     private static string GetOriginalBaseClassDeclaration(ClassDeclarationSyntax cls)
     {
         if (cls.BaseList == null || !cls.BaseList.Types.Any())
         {
-            return string.Empty; // ÎŞ»ùÀàÔò·µ»Ø¿Õ£¬²»Éú³É¼Ì³ĞÓï·¨
+            return string.Empty; // æ— åŸºç±»åˆ™è¿”å›ç©ºï¼Œä¸ç”Ÿæˆç»§æ‰¿è¯­æ³•
         }
-        // Ô­ÑùÆ´½Ó»ùÀàÉùÃ÷£¨±£Áô·ºĞÍ¡¢¶àÖØ¼Ì³ĞµÈÍêÕûÓï·¨£©
+        // åŸæ ·æ‹¼æ¥åŸºç±»å£°æ˜ï¼ˆä¿ç•™æ³›å‹ã€å¤šé‡ç»§æ‰¿ç­‰å®Œæ•´è¯­æ³•ï¼‰
         string baseTypes = string.Join(", ", cls.BaseList.Types.Select(t => t.ToString().Trim()));
         return baseTypes;
     }
-    // ¸ù¾İ²ÎÊıÁĞ±í»ñÈ¡²ÎÊıÀàĞÍ±êÊ¶£¨ÓÃÓÚ·Ö×é£©
+    // æ ¹æ®å‚æ•°åˆ—è¡¨è·å–å‚æ•°ç±»å‹æ ‡è¯†ï¼ˆç”¨äºåˆ†ç»„ï¼‰
     static string GetParameterTypeKey(ParameterListSyntax paramList)
     {
         if (!paramList.Parameters.Any())
@@ -358,10 +364,11 @@ class RpcCodeGenerator
                 }
                 catch (Exception ex)
                 {
-                    UnityEngine.Debug.LogError($"É¾³ıÎÄ¼şÊ§°Ü: {file}, ´íÎó: {ex.Message}");
+                    UnityEngine.Debug.LogError($"åˆ é™¤æ–‡ä»¶å¤±è´¥: {file}, é”™è¯¯: {ex.Message}");
                 }
             }
             UnityEditor.AssetDatabase.Refresh();
         }
     }
 }
+

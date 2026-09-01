@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class ServerLauncher
@@ -10,7 +9,7 @@ public class ServerLauncher
     private DedicateServerProgram server;
     private void Awake()
     {
-        server=new DedicateServerProgram();
+        server = new();
         server.Start();
     }
     private void Update()

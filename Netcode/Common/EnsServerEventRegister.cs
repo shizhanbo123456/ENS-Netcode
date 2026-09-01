@@ -4,14 +4,19 @@ using Utils;
 using request = Ens.Request;
 public class EnsServerEventRegister
 {
+    private static bool registered;
     public static void RegistDedicateServer()
     {
+        if (registered) return;
+        registered = true;
         Server_A();
         Server_H();
         Server_D();
         Server_F();
         Server_f();
         Server_Q();
+        Server_M();
+        Server_N();
         Server_Any();
         RegistServerRequests();
     }
@@ -120,12 +125,35 @@ public class EnsServerEventRegister
             {
                 conn.room.PTP(conn.room.CurrentAuthorityAt, messageType,delivery, F_MessageWriter.instance);
             }
-            else if (to == SendTo.Server) { }
+            else if (to == SendTo.Server)
+            {
+                InvokeServerRpcLocal(b, s);
+            }
             else
             {
                 conn.room.PTP(to.Target, messageType,delivery, F_MessageWriter.instance);
             }
         });
+    }
+    private static void InvokeServerRpcLocal(byte[] bytes, Segment segment)
+    {
+        int indexStart = MessageReader.BodyIndexStart(segment);
+        int invalidIndex = MessageReader.BodyIndexInvalid(segment);
+        short id = ShortSerializer.Deserialize(bytes, ref indexStart, invalidIndex);
+        EnsBehaviour obj = EnsNetworkObjectManager.GetObject(id);
+        if (obj == null)
+        {
+            if (EnsInstance.DevelopmentDebug) UnityEngine.Debug.LogError("未找到id为" + id + "的物体");
+            return;
+        }
+
+        Segment rpcSegment = new Segment(segment.StartIndex + MessageReader.BodyOffset + 2,
+            segment.Length - MessageReader.BodyOffset - 4);
+        if (!obj.InvokeFunc(bytes, rpcSegment))
+        {
+            UnityEngine.Debug.LogError("检测到未注册的函数");
+            Utils.Debug.PrintBytes(bytes, segment);
+        }
     }
     private class f_MessageWriter : MessageWriter
     {
@@ -157,7 +185,7 @@ public class EnsServerEventRegister
     }
     protected static void Server_f()
     {
-        //����Idͬ��
+        //物体Id同步
         MessageHandlerServer.Regist(Header.f,(conn, b, s) =>
         {
             if (conn.room == null) return;
@@ -190,7 +218,10 @@ public class EnsServerEventRegister
             {
                 conn.room.PTP(conn.room.CurrentAuthorityAt, messageType, delivery, f_MessageWriter.instance);
             }
-            else if (to == SendTo.Server) { }
+            else if (to == SendTo.Server)
+            {
+                InvokeServerRpcLocal(b, s);
+            }
             else
             {
                 conn.room.PTP(to.Target, messageType,delivery, f_MessageWriter.instance);
@@ -232,14 +263,14 @@ public class EnsServerEventRegister
             string reply = EnsServerRequest.OnRecvRequest(Q_MessageWriter.instance.t_header, Q_MessageWriter.instance.t_content, conn);
             if (reply == string.Empty)
             {
-                Utils.Debug.LogError($"��{Q_MessageWriter.instance.t_header}:{Q_MessageWriter.instance.t_content}����ӦΪ��");
+                Utils.Debug.LogError($"对{Q_MessageWriter.instance.t_header}:{Q_MessageWriter.instance.t_content}的响应为空");
                 return;
             }
             Q_MessageWriter.instance.t_content = reply;
             conn.Send(Header.Q, Delivery.Reliable, Q_MessageWriter.instance);
         });
     }
-    protected static void Client_M()
+    protected static void Server_M()
     {
         MessageHandlerServer.Regist(Header.M, (conn,b, s) =>
         {
@@ -247,10 +278,10 @@ public class EnsServerEventRegister
             int invalidIndex = MessageReader.BodyIndexInvalid(s);
             int header = IntSerializer.Deserialize(b, ref index, invalidIndex);
             string content = StringSerializer.Deserialize(b, ref index, invalidIndex);
-            EnsRoomManager.Instance.RecvEvent(header, content);
+            EnsRoomManager.Instance.RecvEvent(conn,header, content);
         });
     }
-    protected static void Client_N()
+    protected static void Server_N()
     {
         MessageHandlerServer.Regist(Header.N,(conn,b, s) =>
         {

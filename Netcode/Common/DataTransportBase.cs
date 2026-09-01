@@ -182,7 +182,7 @@ public readonly struct Segment
         return StartIndex + " " + Length;
     }
 }
-internal interface MessageWriter
+public interface MessageWriter
 {
     int GetLength();
     bool Write(SendBuffer buffer);

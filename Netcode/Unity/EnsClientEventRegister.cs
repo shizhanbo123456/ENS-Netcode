@@ -3,8 +3,11 @@ using Utils;
 using request = Ens.Request;
 public class EnsClientEventRegister
 {
+    private static bool registered;
     public static void RegistUnity()
     {
+        if (registered) return;
+        registered = true;
         EnsServerEventRegister.RegistDedicateServer();
 
         Client_C();
@@ -45,7 +48,7 @@ public class EnsClientEventRegister
     }
     protected static void Client_C()
     {
-        //³É¹¦Á¬½Ó
+        //æˆåŠŸè¿æ¥
         MessageHandlerClient.Regist(Header.C,(b,s) =>
         {
             int index = MessageReader.BodyIndexStart(s);
@@ -57,7 +60,7 @@ public class EnsClientEventRegister
     }
     protected static void Client_E()
     {
-        //ÊÂ¼ş
+        //äº‹ä»¶
         MessageHandlerClient.Regist(Header.E, (b,s) =>
         {
             int index = MessageReader.BodyIndexStart(s);
@@ -66,7 +69,7 @@ public class EnsClientEventRegister
             var i = ShortSerializer.Deserialize(b, ref index, invalidIndex);
             if (e == 1) EnsInstance.OnClientEnter?.Invoke(i);
             else if (e == 2) EnsInstance.OnClientExit?.Invoke(i);
-            else Debug.LogError("[E]´æÔÚ´íÎóµÄÊÂ¼şÏûÏ¢");
+            else Debug.LogError("[E]å­˜åœ¨é”™è¯¯çš„äº‹ä»¶æ¶ˆæ¯");
         });
     }
     protected static void Client_H()
@@ -130,12 +133,12 @@ public class EnsClientEventRegister
             EnsBehaviour obj = EnsNetworkObjectManager.GetObject(id);
             if (obj == null)
             {
-                if (EnsInstance.DevelopmentDebug) Debug.LogError("Î´ÕÒµ½idÎª" + id + "µÄÎïÌå");
+                if (EnsInstance.DevelopmentDebug) Debug.LogError("æœªæ‰¾åˆ°idä¸º" + id + "çš„ç‰©ä½“");
                 return;
             }
-            if(!obj.InvokeFunc(b, new Segment(s.StartIndex + MessageReader.BodyOffset+2, s.Length - MessageReader.BodyOffset-2)))//¶îÍâÅÅ³ıÎïÌåid²¿·Ö
+            if(!obj.InvokeFunc(b, new Segment(s.StartIndex + MessageReader.BodyOffset+2, s.Length - MessageReader.BodyOffset-2)))//é¢å¤–æ’é™¤ç‰©ä½“idéƒ¨åˆ†
             {
-                Debug.LogError("¼ì²âµ½Î´×¢²áµÄº¯Êı");
+                Debug.LogError("æ£€æµ‹åˆ°æœªæ³¨å†Œçš„å‡½æ•°");
                 Utils.Debug.PrintBytes(b,s);
             }
         });

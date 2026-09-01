@@ -1,14 +1,15 @@
 using System;
 
 /// <summary>
-/// ENCLocalClientºÍENCHostÒ»ÆðÊ¹ÓÃ<br></br>
-/// ÔÚµ÷ÓÃStartHostÊ±ÓÉENCHost´´½¨
-/// º¯Êýµ÷ÓÃ¹æÔòÓëENCClientÒ»ÖÂ
+/// ENCLocalClientå’ŒENCHostä¸€èµ·ä½¿ç”¨<br></br>
+/// åœ¨è°ƒç”¨StartHostæ—¶ç”±ENCHoståˆ›å»º
+/// å‡½æ•°è°ƒç”¨è§„åˆ™ä¸ŽENCClientä¸€è‡´
 /// </summary>
 internal class ENCLocalClient : EnsClient
 {
     internal CircularQueue<byte[]> ReceivedData;
     private SendBuffer _buffer;
+    private bool shutdownStarted;
     public ENCLocalClient()
     {
         _on = true;
@@ -18,6 +19,7 @@ internal class ENCLocalClient : EnsClient
     }
     internal override void Send(byte messageType, Delivery delivery, MessageWriter writer = null)
     {
+        if (!_on || _buffer == null || DeliverySource == null) return;
         Send(_buffer, messageType, DeliverySource.DeliveryToId(delivery), writer);
     }
     private void OnSend(byte[] bytes, int length)
@@ -54,10 +56,15 @@ internal class ENCLocalClient : EnsClient
     }
     internal override void ShutDown()
     {
+        if (shutdownStarted) return;
+        shutdownStarted = true;
         _on = false;
+        while (ReceivedData != null && ReceivedData.Read(out var data))
+            BytesPool.ReturnBuffer(data);
+        _buffer?.Dispose();
         ReceivedData = null;
         _buffer = null;
-        DeliverySource.Return(DeliverySource);
+        if (DeliverySource != null) DeliverySource.Return(DeliverySource);
         DeliverySource = null;
     }
 }

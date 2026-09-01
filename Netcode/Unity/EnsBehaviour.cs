@@ -99,6 +99,14 @@ public abstract class EnsBehaviour : MonoBehaviour
     {
         LogUnknownFunc();
     }
+    public void CallFuncRpc<T1, T2, T3, T4, T5,T6>(Action<T1, T2, T3, T4, T5,T6> func, SendTo sendto, Delivery delivery, T1 param1, T2 param2, T3 param3, T4 param4, T5 param5,T6 param6)
+    {
+        LogUnknownFunc();
+    }
+    public void CallFuncRpc<T1, T2, T3, T4, T5, T6,T7>(Action<T1, T2, T3, T4, T5, T6,T7> func, SendTo sendto, Delivery delivery, T1 param1, T2 param2, T3 param3, T4 param4, T5 param5, T6 param6,T7 param7)
+    {
+        LogUnknownFunc();
+    }
     private void LogUnknownFunc()
     {
         Debug.LogError("调用未注册的代码，请检查调用堆栈");

@@ -3,7 +3,7 @@ using System;
 using Utils;
 
 /// <summary>
-/// ÊµÀı»¯Ê±Æô¶¯¿Í»§¶Ë
+/// å®ä¾‹åŒ–æ—¶å¯åŠ¨å®¢æˆ·ç«¯
 /// </summary>
 internal class EnsClient:DataTransportBase
 {
@@ -12,36 +12,43 @@ internal class EnsClient:DataTransportBase
     private ProtocolBase Client;
 
     private float heartbeatSendTime;
+    private bool shutdownStarted;
 
     protected bool _on;
 
     protected EnsClient(){ }
     internal EnsClient(string ip,int port)
     {
-        Protocol.OnClientInitialized += OnClientInitialized;
-
         Client = Protocol.GetClient(ip,port);
-        if(KeyLibrary == null) KeyLibrary = new KeyLibrary(Client.SendBuffer, DeliverySource);
+        if (Client == null) throw new InvalidOperationException("å®¢æˆ·ç«¯ä¼ è¾“åˆ›å»ºå¤±è´¥");
+        EnsureInitialized();
 
         _on = true;
     }
-    private void OnClientInitialized()
+    private void EnsureInitialized()
     {
-        Protocol.OnClientInitialized -= OnClientInitialized;
-        //´¦ÀíGetClientÖĞÁ¢¼´³õÊ¼»¯Íê³ÉµÄÇé¿ö£¬´ËÊ±Client»¹Î´¸³Öµ£¬µ¼ÖÂKeyLibraryÎ´ÊµÀı»¯
-        if (Client!=null)KeyLibrary = new KeyLibrary(Client.SendBuffer, DeliverySource);
+        if (KeyLibrary == null && Client != null && Client.Initialized)
+            KeyLibrary = new KeyLibrary(Client.SendBuffer, DeliverySource);
     }
     internal override void Send(byte messageType, Delivery delivery, MessageWriter writer = null)
     {
-        if (!Client.Initialized)
+        EnsureInitialized();
+        if (Client == null || !Client.Initialized || KeyLibrary == null)
         {
-            Debug.LogWarning("¿Í»§¶Ë³õÊ¼»¯ÖĞ");
+            Debug.LogWarning("å®¢æˆ·ç«¯åˆå§‹åŒ–ä¸­");
             return;
         }
         KeyLibrary.OnSend(messageType, delivery, writer);
     }
     internal override void Update()
     {
+        if (Client == null) return;
+        if (Client.TransportClosed)
+        {
+            EnsInstance.Corr.ShutDown();
+            return;
+        }
+        EnsureInitialized();
         if (Time.time>hbRecvTime)
         {
             EnsInstance.Corr.ShutDown();
@@ -52,7 +59,7 @@ internal class EnsClient:DataTransportBase
             hbSendTime= Time.time+EnsInstance.HeartbeatMsgInterval;
             Send(Header.H, Delivery.Unreliable);
         }
-        if (!Client.Initialized) return;
+        if (!Client.Initialized || KeyLibrary == null) return;
         var buffer = Client.ReceiveBuffer;
         while (buffer.Read(out var data)&&_on)
         {
@@ -77,20 +84,31 @@ internal class EnsClient:DataTransportBase
     }
     internal override void FlushSendBuffer()
     {
-        if (!Client.Initialized) return;
+        if (Client == null || !Client.Initialized || Client.SendBuffer == null) return;
         Client.SendBuffer.Flush();
     }
     internal override void ShutDown()
     {
-        if (Client == null || Client.Cancelled) return;
-        Send(Header.D, Delivery.Unreliable);
-        Client.SendBuffer.Flush();
-
+        if (shutdownStarted) return;
+        shutdownStarted = true;
         _on = false;
+        var client = Client;
+        try
+        {
+            if (client != null && client.Initialized && !client.Cancelled)
+            {
+                Send(Header.D, Delivery.Unreliable);
+                client.SendBuffer?.Flush();
+            }
+        }
+        catch (Exception e)
+        {
+            Utils.Debug.ErrorCaught(e);
+        }
+        KeyLibrary?.Clear();
         base.ShutDown();
-        KeyLibrary.Clear();
-        Client.ShutDown();
-        Client?.Dispose();
+        client?.ShutDown();
+        client?.Dispose();
         Client = null;
         KeyLibrary = null;
     }

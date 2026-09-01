@@ -14,6 +14,8 @@ namespace ProtocolWrapper.Protocols.Tcp
     internal class ListenerTcp : ListenerBase
     {
         private TcpListener Listener;
+        // Accept 线程只记录已接受的 socket；ConnectionTcp 的创建与上层回调在主线程完成。
+        private readonly CircularQueue<TcpClient> PendingClients = new CircularQueue<TcpClient>(10);
 
         public ListenerTcp(IPAddress ip,int port) : base(ip, port)
         {
@@ -48,7 +50,7 @@ namespace ProtocolWrapper.Protocols.Tcp
                 try
                 {
                     TcpClient Client = Listener.AcceptTcpClient();//------------------------------会导致线程阻塞
-                    OnRecvConnection(Client);
+                    PendingClients.Write(Client);
                 }
                 catch
                 {
@@ -63,7 +65,7 @@ namespace ProtocolWrapper.Protocols.Tcp
                 try
                 {
                     TcpClient Client = await Listener.AcceptTcpClientAsync(); // 异步接受客户端连接  
-                    OnRecvConnection(Client);
+                    PendingClients.Write(Client);
                 }
                 catch
                 {
@@ -71,23 +73,35 @@ namespace ProtocolWrapper.Protocols.Tcp
                 }
             }
         }
-        private void OnRecvConnection(TcpClient Client)
+        public override void Update()
         {
-            if (!Listening)
+            while (PendingClients.Read(out var client))
             {
-                Client.Close();
-                Client.Dispose();
-                return;
+                if (!Listening || Cancelled)
+                {
+                    client.Close();
+                    client.Dispose();
+                    continue;
+                }
+                var connection = new ConnectionTcp();
+                connection.Init(client);
+                Protocol.OnRecvConnection?.Invoke(connection);
             }
-            var Connection = new ConnectionTcp();
-            Connection.Init(Client);
-            Protocol.OnRecvConnection?.Invoke(Connection);
         }
 
         public override void ShutDown()
         {
-            Listening = false;
+            if (Listening) EndListening();
             Cancelled = true;
+        }
+        protected override void ReleaseManagedMenory()
+        {
+            while (PendingClients.Read(out var client))
+            {
+                client.Close();
+                client.Dispose();
+            }
+            base.ReleaseManagedMenory();
         }
         protected override void ReleaseUnmanagedMenory()
         {

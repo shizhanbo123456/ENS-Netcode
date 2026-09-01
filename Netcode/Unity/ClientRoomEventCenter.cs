@@ -89,7 +89,7 @@ public class ClientRoomManagerEventCenter
             Utils.Debug.LogWarning($"Room manager event {type} has no register");
         }
     }
-    protected static void TrigEvent(Delivery delivery,int header,string content)
+    public static void TrigEvent(Delivery delivery,int header,string content)
     {
         if (EnsInstance.Corr != null && EnsInstance.Corr.Client != null)
         {

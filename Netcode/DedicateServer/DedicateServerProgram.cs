@@ -12,7 +12,7 @@ public class DedicateServerProgram
 
     //为空则视为IPAddress.Any
     public string IP;
-    public int port = 44433;
+    public int port = 65432;
 
     public void Start()
     {

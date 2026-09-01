@@ -25,11 +25,11 @@ public class EnsCorrespondent :MonoBehaviour
 
     [Space]
     [Tooltip("How long the local key will exist, it includes sending and ignoring response")]
-    public float KeyExistTime = 5f;//¹Ø¼üĞÅÏ¢ºöÂÔÊ±³¤
+    public float KeyExistTime = 5f;//å…³é”®ä¿¡æ¯å¿½ç•¥æ—¶é•¿
     [Tooltip("The interval of unconfirmed keys to send")]
-    public float KeySendInterval = 0.2f;//Î´È·ÈÏµÄ¹Ø¼üĞÅÏ¢·¢ËÍÊ±³¤
+    public float KeySendInterval = 0.2f;//æœªç¡®è®¤çš„å…³é”®ä¿¡æ¯å‘é€æ—¶é•¿
     [Tooltip("How long will you ignore key messages after confirmed")]
-    public float RKeyExistTime = 5f;//·µ»ØµÄ¹Ø¼üĞÅÏ¢ºöÂÔÊ±³¤
+    public float RKeyExistTime = 5f;//è¿”å›çš„å…³é”®ä¿¡æ¯å¿½ç•¥æ—¶é•¿
 
     [Tooltip("The interval of strive keys to send")]
     public float StriveKeySendInterval = 0.01f;
@@ -41,12 +41,12 @@ public class EnsCorrespondent :MonoBehaviour
 
     [Space]
     /// <summary>
-    /// ÉÏ´Î½ÓÊÕĞÄÌø¼ì²âÊ±¼ä³¬¹ı´ËãĞÖµ»áÈÏÎª¶Ï¿ªÁËÁ¬½Ó
+    /// ä¸Šæ¬¡æ¥æ”¶å¿ƒè·³æ£€æµ‹æ—¶é—´è¶…è¿‡æ­¤é˜ˆå€¼ä¼šè®¤ä¸ºæ–­å¼€äº†è¿æ¥
     /// </summary>
     [Tooltip("How long will a connection be reset since the last message received")]
     public float DisconnectThreshold = 3f;
     /// <summary>
-    /// ·¢ËÍĞÄÌø¼ì²âÏûÏ¢µÄ¼ä¸ô
+    /// å‘é€å¿ƒè·³æ£€æµ‹æ¶ˆæ¯çš„é—´éš”
     /// </summary>
     [Tooltip("The interval to send heartbeat message")]
     public float HeartbeatMsgInterval = 0.2f;
@@ -55,6 +55,7 @@ public class EnsCorrespondent :MonoBehaviour
     internal EnsServer Server;
     internal EnsClient Client;
     internal EnsHost Host;
+    private bool shutdownStarted;
 
     protected virtual void OnValidate()
     {
@@ -99,12 +100,23 @@ public class EnsCorrespondent :MonoBehaviour
     {
         if (networkMode == NetworkMode.Host)
         {
-            Server.Update();
-            Server.FlushSendBuffer();
+            Server?.Update();
+            Server?.FlushSendBuffer();
         }
         if (networkMode == NetworkMode.Host || networkMode == NetworkMode.Client)
         {
-            Client.Update();
+            Client?.Update();
+            Client?.FlushSendBuffer();
+        }
+    }
+    public void FlushSendBufferNow()
+    {
+        if (networkMode == NetworkMode.Host)
+        {
+            Server?.FlushSendBuffer();
+        }
+        if (networkMode == NetworkMode.Host || networkMode == NetworkMode.Client)
+        {
             Client?.FlushSendBuffer();
         }
     }
@@ -112,12 +124,14 @@ public class EnsCorrespondent :MonoBehaviour
     {
         if (networkMode != NetworkMode.None)
         {
-            foreach (var p in EnsNetworkObjectManager.GetPriority().ToArray())//´´½¨¸±±¾±ÜÃâÒòĞŞ¸Ä²úÉú´íÎó
+            foreach (var p in EnsNetworkObjectManager.GetPriority().ToArray())//åˆ›å»ºå‰¯æœ¬é¿å…å› ä¿®æ”¹äº§ç”Ÿé”™è¯¯
             {
                 EnsNetworkObjectManager.Update(p);
+                // ManagedUpdate å¯èƒ½é€šè¿‡ä¸šåŠ¡å›è°ƒå…³é—­å½“å‰ç½‘ç»œè¿æ¥ã€‚
+                if (networkMode == NetworkMode.None || Client == null) break;
                 Client.FlushSendBuffer();
             }
-            UpdateServerAndClient();
+            if (networkMode != NetworkMode.None) UpdateServerAndClient();
         }
         Loop.LoopCommon();
         Loop.LoopClient();
@@ -126,9 +140,11 @@ public class EnsCorrespondent :MonoBehaviour
     {
         if (networkMode != NetworkMode.None)
         {
-            foreach (var p in EnsNetworkObjectManager.GetFixedPriority().ToArray())//´´½¨¸±±¾±ÜÃâÒòĞŞ¸Ä²úÉú´íÎó
+            foreach (var p in EnsNetworkObjectManager.GetFixedPriority().ToArray())//åˆ›å»ºå‰¯æœ¬é¿å…å› ä¿®æ”¹äº§ç”Ÿé”™è¯¯
             {
                 EnsNetworkObjectManager.FixedUpdate(p);
+                // FixedManagedUpdate åŒæ ·å¯èƒ½è§¦å‘ ShutDownã€‚
+                if (networkMode == NetworkMode.None || Client == null) break;
                 Client.FlushSendBuffer();
             }
         }
@@ -137,15 +153,16 @@ public class EnsCorrespondent :MonoBehaviour
     {
         if (networkMode != NetworkMode.None)
         {
-            Debug.LogWarning("ÒÑÆô¶¯£¬¹Ø±Õºó²Å¿Éµ÷ÓÃ");
+            Debug.LogWarning("å·²å¯åŠ¨ï¼Œå…³é—­åæ‰å¯è°ƒç”¨");
             return;
         }
         if (!IPAddress.TryParse(IP, out _) || Port < 0 || Port > 65535)
         {
-            Debug.Log("ÊäÈëµÄIP»ò¶Ë¿ÚÓĞÎó");
+            Debug.Log("è¾“å…¥çš„IPæˆ–ç«¯å£æœ‰è¯¯");
             return;
         }
 
+        shutdownStarted = false;
         networkMode = NetworkMode.Host;
         EnsHost.Create(out var host, out var client);
         Server = new EnsServer(IPAddress.Any,Port);
@@ -156,31 +173,33 @@ public class EnsCorrespondent :MonoBehaviour
     {
         if (networkMode != NetworkMode.None)
         {
-            Debug.LogWarning("ÒÑÆô¶¯£¬¹Ø±Õºó²Å¿Éµ÷ÓÃ");
+            Debug.LogWarning("å·²å¯åŠ¨ï¼Œå…³é—­åæ‰å¯è°ƒç”¨");
             return;
         }
         if (!IPAddress.TryParse(IP, out _) || Port < 0 || Port > 65535)
         {
-            Debug.Log("ÊäÈëµÄIP»ò¶Ë¿ÚÓĞÎó");
+            Debug.Log("è¾“å…¥çš„IPæˆ–ç«¯å£æœ‰è¯¯");
             return;
         }
 
         try
         {
             EnsInstance.ClientConnectRejected = true;
+            shutdownStarted = false;
             networkMode = NetworkMode.Client;
             Client = new EnsClient(IP, Port);
         }
         catch (Exception e)
         {
-            Debug.LogError("¿Í»§¶ËÆô¶¯Ê§°Ü£¬IP=" + IP + " Port=" + Port + " Log:" + e.ToString());
+            Debug.LogError("å®¢æˆ·ç«¯å¯åŠ¨å¤±è´¥ï¼ŒIP=" + IP + " Port=" + Port + " Log:" + e.ToString());
+            ShutDown();
         }
     }
     public void SetServerListening(bool listening)
     {
         if (Server == null)
         {
-            Debug.LogError("Î´Æô¶¯·şÎñÆ÷");
+            Debug.LogError("æœªå¯åŠ¨æœåŠ¡å™¨");
             return;
         }
         if(listening)Server.StartListening();
@@ -189,6 +208,8 @@ public class EnsCorrespondent :MonoBehaviour
 
     public virtual void ShutDown()
     {
+        if (shutdownStarted) return;
+        shutdownStarted = true;
         try
         {
             if (networkMode == NetworkMode.Client)
@@ -200,13 +221,27 @@ public class EnsCorrespondent :MonoBehaviour
             }
             else if (networkMode == NetworkMode.Host)
             {
-                if (Server != null)//¹Ø±ÕServer->¹Ø±ÕHost
+                if (Server != null)//å…³é—­Server->å…³é—­Host
                 {
-                    Server.ShutDown();
+                    try
+                    {
+                        Server.ShutDown();
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogException(e);
+                    }
                 }
                 if (Client != null)
                 {
-                    Client.ShutDown();
+                    try
+                    {
+                        Client.ShutDown();
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogException(e);
+                    }
                 }
             }
         }
@@ -218,7 +253,7 @@ public class EnsCorrespondent :MonoBehaviour
         {
             Server = null;
             Client = null;
-            Server = null;
+            Host = null;
         }
         networkMode = NetworkMode.None;
         if (EnsInstance.ClientConnectRejected)

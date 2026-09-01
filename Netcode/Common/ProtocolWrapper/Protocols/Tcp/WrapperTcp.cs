@@ -1,4 +1,4 @@
-﻿using Utils;
+using Utils;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -13,7 +13,7 @@ namespace ProtocolWrapper.Protocols.Tcp
         protected NetworkStream Stream;
 
         /// <summary>
-        /// 需要client已经初始化
+        /// 闇€瑕乧lient宸茬粡鍒濆鍖?
         /// </summary>
         protected void Init(TcpClient client)
         {
@@ -29,11 +29,19 @@ namespace ProtocolWrapper.Protocols.Tcp
                 try
                 {
                     int bytesRead = Stream.Read(buffer, 0, buffer.Length);
+                    // NetworkStream.Read 返回 0 表示对端已正常关闭连接。
+                    // 继续循环会反复读取 0 并造成线程空转。
+                    if (bytesRead == 0)
+                    {
+                        MarkTransportClosed();
+                        break;
+                    }
                     OnRecvData(buffer, bytesRead);
                 }
                 catch
                 {
-                    
+                    if (!Cancelled) MarkTransportClosed();
+                    break;
                 }
             }
             BytesPool.ReturnBuffer(buffer);
@@ -47,11 +55,17 @@ namespace ProtocolWrapper.Protocols.Tcp
                 try
                 {
                     int bytesRead = await Stream.ReadAsync(buffer, 0, buffer.Length);
+                    if (bytesRead == 0)
+                    {
+                        MarkTransportClosed();
+                        break;
+                    }
                     OnRecvData(buffer, bytesRead);
                 }
                 catch
                 {
-                    
+                    if (!Cancelled) MarkTransportClosed();
+                    break;
                 }
             }
             BytesPool.ReturnBuffer(buffer);
@@ -69,12 +83,12 @@ namespace ProtocolWrapper.Protocols.Tcp
         {
             if (!Initialized)
             {
-                Debug.LogError("[W]WrapperTcp未完成初始化");
+                Debug.LogError("[W]WrapperTcp鏈畬鎴愬垵濮嬪寲");
                 return;
             }
             if (Cancelled)
             {
-                Debug.LogError("[W]WrapperTcp已被取消");
+                Debug.LogError("[W]WrapperTcp宸茶鍙栨秷");
                 return;
             }
 
