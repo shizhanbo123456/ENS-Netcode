@@ -83,7 +83,6 @@ public sealed class BigBitField : IDisposable
     /// </summary>
     public static BigBitField FromBytes(byte[] bytes)
     {
-        ArgumentNullException.ThrowIfNull(bytes);
         int top = bytes.Length - 1;
         while (top >= 0 && bytes[top] == 0) top--;
         if (top < 0) return new BigBitField(); // 无标识位 → 空数据
