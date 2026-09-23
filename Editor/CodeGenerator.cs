@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 class RpcCodeGenerator
 {
     private static readonly string sourceDir = "Assets/Scripts";
-    private static readonly string genDir = "Assets/Scripts/EnsNetcode/Gen";
+    private static readonly string genDir = "Assets/EnsNetcode/Gen";
 
     [UnityEditor.MenuItem("Ens/GenerateCode")]
     public static void GenCode()
