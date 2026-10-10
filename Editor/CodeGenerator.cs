@@ -12,6 +12,16 @@ class RpcCodeGenerator
     private static readonly string sourceDir = "Assets/Scripts";
     private static readonly string genDir = "Assets/ENS-Netcode/Gen";
 
+    //每个类的Rpc方法信息：方法声明 + 生成的Invoke调用名（按fullName合并partial多文件声明）
+    private class ClassRpcInfo
+    {
+        public List<MethodDeclarationSyntax> Methods = new();
+        public List<string> InvokeNames = new();
+        public HashSet<string> ParamKeys = new();
+        public Dictionary<string, int> OverloadCounter = new();
+    }
+    private static Dictionary<string, ClassRpcInfo> rpcInfoByClass;
+
     [UnityEditor.MenuItem("Ens/GenerateCode")]
     public static void GenCode()
     {
@@ -23,6 +33,7 @@ class RpcCodeGenerator
         // 收集所有类的信息并构建继承关系
         var allClasses = new List<ClassDeclarationSyntax>();
         var classFullNames = new Dictionary<ClassDeclarationSyntax, string>();
+        rpcInfoByClass = new Dictionary<string, ClassRpcInfo>();
 
         // 首先收集所有类及其完整名称
         foreach (var file in Directory.EnumerateFiles(sourceDir, "*.cs", SearchOption.AllDirectories))
@@ -43,10 +54,30 @@ class RpcCodeGenerator
                 string @namespace = root.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? "";
                 string fullName = string.IsNullOrEmpty(@namespace) ? cls.Identifier.Text : $"{@namespace}.{cls.Identifier.Text}";
                 classFullNames[cls] = fullName;
+
+                //收集该类的Rpc方法；同一类的partial多文件声明合并，Invoke调用名按fullName维度统一编号
+                var rpcMethods = cls.DescendantNodes()
+                    .OfType<MethodDeclarationSyntax>()
+                    .Where(m => m.AttributeLists.Any(a => a.Attributes.Any(IsRpcAttribute)))
+                    .Where(m => !m.AttributeLists.Any(a => a.ToString().Contains("GeneratedCode")))
+                    .ToList();
+
+                if (!rpcMethods.Any()) continue;
+                if (!rpcInfoByClass.TryGetValue(fullName, out var info))
+                {
+                    info = new ClassRpcInfo();
+                    rpcInfoByClass[fullName] = info;
+                }
+                foreach (var m in rpcMethods)
+                {
+                    info.Methods.Add(m);
+                    info.InvokeNames.Add(NextInvokeName(info, m.Identifier.Text));
+                    info.ParamKeys.Add(GetParameterTypeKey(m.ParameterList));
+                }
             }
         }
 
-        // 构建继承哈希表（包含直接和间接继承TestBehaviour的类）
+        // 构建继承哈希表（包含直接和间接继承EnsBehaviour的类）
         var inheritedFromTestBehaviour = new HashSet<string>(StringComparer.Ordinal)
         {
             nameof(EnsBehaviour) // 初始加入目标基类
@@ -72,11 +103,18 @@ class RpcCodeGenerator
             }
         } while (hasNewAdded); // 循环直到没有新类加入
 
+        //fullName -> 类声明（继承链回溯用），同名取首个声明
+        var classByName = new Dictionary<string, ClassDeclarationSyntax>();
+        foreach (var kvp in classFullNames)
+        {
+            if (!classByName.ContainsKey(kvp.Value)) classByName.Add(kvp.Value, kvp.Key);
+        }
+
         // 处理符合条件的类
         foreach (var file in Directory.EnumerateFiles(sourceDir, "*.cs", SearchOption.AllDirectories))
         {
             if (file.Contains("Generated")) continue;
-            generatedCount += ProcessFile(file, genDir, inheritedFromTestBehaviour);
+            generatedCount += ProcessFile(file, genDir, inheritedFromTestBehaviour, allClasses, classByName, classFullNames);
         }
 
         UnityEditor.AssetDatabase.Refresh();
@@ -92,7 +130,31 @@ class RpcCodeGenerator
         return matchedClass != null ? classFullNames[matchedClass] : baseTypeName;
     }
 
-    static int ProcessFile(string sourcePath, string genDir, HashSet<string> targetBaseClasses)
+    //同名重载的Invoke调用名计数（按类维度，与类内声明顺序一致）
+    private static string NextInvokeName(ClassRpcInfo info, string methodName)
+    {
+        if (!info.OverloadCounter.TryGetValue(methodName, out int count))
+        {
+            count = 0;
+        }
+        info.OverloadCounter[methodName] = count + 1;
+        return $"{methodName}{count}";
+    }
+
+    //判断特性是否为Rpc标记：兼容[Rpc]、[RpcAttribute]及带命名空间前缀的写法
+    private static bool IsRpcAttribute(AttributeSyntax attr)
+    {
+        string name = attr.Name.ToString();
+        int dot = name.LastIndexOf('.');
+        if (dot >= 0) name = name.Substring(dot + 1);
+        if (name.EndsWith("Attribute") && name.Length > "Attribute".Length)
+        {
+            name = name.Substring(0, name.Length - "Attribute".Length);
+        }
+        return name == "Rpc";
+    }
+
+    static int ProcessFile(string sourcePath, string genDir, HashSet<string> targetBaseClasses, List<ClassDeclarationSyntax> allClasses, Dictionary<string, ClassDeclarationSyntax> classByName, Dictionary<ClassDeclarationSyntax, string> classFullNames)
     {
         int generatedCount = 0;
         string code = File.ReadAllText(sourcePath);
@@ -121,40 +183,79 @@ class RpcCodeGenerator
 
         foreach (var cls in targetClasses)
         {
-            if (GenerateCodeForClass(cls, sourcePath, genDir, root)) generatedCount++;
+            string fullName = string.IsNullOrEmpty(currentNamespace) ? cls.Identifier.Text : $"{currentNamespace}.{cls.Identifier.Text}";
+            if (GenerateCodeForClass(cls, genDir, root, fullName, allClasses, classByName, classFullNames)) generatedCount++;
         }
         return generatedCount;
     }
 
-    //判断特性是否为Rpc标记：兼容[Rpc]、[RpcAttribute]及带命名空间前缀的写法
-    private static bool IsRpcAttribute(AttributeSyntax attr)
+    //构建fullName的继承链（根→自身），只含工程内扫描到的类；到EnsBehaviour或外部基类为止
+    private static List<string> BuildChain(string fullName, List<ClassDeclarationSyntax> allClasses, Dictionary<string, ClassDeclarationSyntax> classByName, Dictionary<ClassDeclarationSyntax, string> classFullNames)
     {
-        string name = attr.Name.ToString();
-        int dot = name.LastIndexOf('.');
-        if (dot >= 0) name = name.Substring(dot + 1);
-        if (name.EndsWith("Attribute") && name.Length > "Attribute".Length)
+        var chain = new List<string>();
+        var visited = new HashSet<string>();
+        var current = fullName;
+        while (current != null && visited.Add(current))
         {
-            name = name.Substring(0, name.Length - "Attribute".Length);
+            chain.Add(current);
+            if (!classByName.TryGetValue(current, out var cls)) break;
+            string baseName = null;
+            if (cls.BaseList != null)
+            {
+                foreach (var t in cls.BaseList.Types)
+                {
+                    var name = GetBaseTypeFullName(t.Type, classFullNames, allClasses);
+                    if (name == nameof(EnsBehaviour)) { baseName = null; break; } //到链顶
+                    if (classByName.ContainsKey(name)) { baseName = name; break; }
+                }
+            }
+            current = baseName;
         }
-        return name == "Rpc";
+        chain.Reverse(); //根→自身
+        return chain;
     }
 
-    static bool GenerateCodeForClass(ClassDeclarationSyntax cls, string sourcePath, string genDir, CompilationUnitSyntax root)
+    static bool GenerateCodeForClass(ClassDeclarationSyntax cls, string genDir, CompilationUnitSyntax root, string fullName, List<ClassDeclarationSyntax> allClasses, Dictionary<string, ClassDeclarationSyntax> classByName, Dictionary<ClassDeclarationSyntax, string> classFullNames)
     {
         string className = cls.Identifier.Text;
         string @namespace = root.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? "";
 
-        // 获取带有Rpc属性的方法（排除已生成的代码）
-        var rpcMethods = cls.DescendantNodes()
-            .OfType<MethodDeclarationSyntax>()
-            .Where(m => m.AttributeLists.Any(a => a.Attributes.Any(IsRpcAttribute)))
-            .Where(m => !m.AttributeLists.Any(a => a.ToString().Contains("GeneratedCode")))
-            .ToList();
+        //构建继承链并统一分配id：根→自身依次编号，保证同一继承链内id唯一，且基类自身生成、子类收录两个视图完全一致
+        var chain = BuildChain(fullName, allClasses, classByName, classFullNames);
+        var recorderEntries = new List<string>();
+        var ownMethodIds = new Dictionary<MethodDeclarationSyntax, byte>();
+        var ownInvokeNames = new Dictionary<MethodDeclarationSyntax, string>();
+        var ownMethods = new List<MethodDeclarationSyntax>();
+        var ancestorParamKeys = new HashSet<string>();
+        byte nextId = 0;
+        foreach (var member in chain)
+        {
+            if (!rpcInfoByClass.TryGetValue(member, out var info)) continue;
+            bool isSelf = member == fullName;
+            for (int i = 0; i < info.Methods.Count; i++)
+            {
+                if (nextId > 255)
+                {
+                    UnityEngine.Debug.LogError($"[{className}] 继承链上Rpc方法总数超过255，无法分配id，跳过生成");
+                    return false;
+                }
+                recorderEntries.Add($"            {{ {nextId}, (p, b, s) => p.{info.InvokeNames[i]}(b, s) }},");
+                if (isSelf)
+                {
+                    ownMethodIds[info.Methods[i]] = nextId;
+                    ownInvokeNames[info.Methods[i]] = info.InvokeNames[i];
+                    ownMethods.Add(info.Methods[i]);
+                }
+                else
+                {
+                    ancestorParamKeys.UnionWith(info.ParamKeys);
+                }
+                nextId++;
+            }
+        }
 
-        if (!rpcMethods.Any()) return false;
-
-        // 为每个方法分配唯一ID
-        var methodIdMap = rpcMethods.Select((m, i) => new { Method = m, Id = (byte)i }).ToDictionary(x => x.Method, x => x.Id);
+        //本类无Rpc方法时不生成文件：无同名FuncRecorder遮蔽，调度由基类的InvokeFunc承担
+        if (!ownMethods.Any()) return false;
 
         // 生成代码
         var codeBuilder = new StringBuilder();
@@ -188,33 +289,19 @@ class RpcCodeGenerator
         codeBuilder.AppendLine($"public partial class {className} : {baseClassDeclaration}");
         codeBuilder.AppendLine("{");
 
-        // 1. 生成FuncRecorder字典
-        Dictionary<string, int> OverloadingCounter = new();
-
-        codeBuilder.AppendLine($"    private static Dictionary<byte, Action<{className}, byte[]>> FuncRecorder = new()");
+        // 1. FuncRecorder：收录链上所有方法（含基类），id为链内唯一编号
+        //（基类生成的FuncRecorder是private，不参与继承隐藏，无需new）
+        codeBuilder.AppendLine($"    private static Dictionary<byte, Action<{className}, byte[], Segment>> FuncRecorder = new()");
         codeBuilder.AppendLine("    {");
-        foreach (var method in rpcMethods)
+        foreach (var entry in recorderEntries)
         {
-            byte id = methodIdMap[method];
-            string methodIdentifier = method.Identifier.Text;
-            int count;
-            if (OverloadingCounter.ContainsKey(methodIdentifier))
-            {
-                OverloadingCounter[methodIdentifier] += 1;
-                count = OverloadingCounter[methodIdentifier];
-            }
-            else
-            {
-                OverloadingCounter.Add(methodIdentifier, 0);
-                count = 0;
-            }
-            codeBuilder.AppendLine($"        {{ {id}, (p, b) => p.Invoke_{methodIdentifier}{count}(b) }},");
+            codeBuilder.AppendLine(entry);
         }
         codeBuilder.AppendLine("    };");
         codeBuilder.AppendLine();
 
-        // 2. 为不同参数类型的方法生成对应的映射和RpcInvoke方法
-        var groupedMethods = rpcMethods.GroupBy(m => GetParameterTypeKey(m.ParameterList));
+        // 2. 为不同参数类型的方法生成对应的映射和RpcInvoke方法（仅本类方法，基类方法用基类生成的CallFuncRpc）
+        var groupedMethods = ownMethods.GroupBy(m => GetParameterTypeKey(m.ParameterList));
         foreach (var group in groupedMethods)
         {
             string paramKey = group.Key;
@@ -222,6 +309,12 @@ class RpcCodeGenerator
             var parameters = method.ParameterList.Parameters;
             var paramTypes = parameters.Select(p => p.Type.ToString()).ToList();
             var paramNames = parameters.Select((p, i) => $"param{i + 1}").ToList();
+
+            // 与基类生成的同签名public方法CallFuncRpc需要用new隐藏，避免CS0108警告
+            //（map字段基类里是private，不参与隐藏，无需new）
+            bool hideBase = ancestorParamKeys.Contains(paramKey);
+            //0参数版本始终与基类的无参CallFuncRpc同签名，保持原有的new
+            string methodNew = hideBase || !parameters.Any() ? "new " : "";
 
             // 生成映射字典
             string actionType = parameters.Any()
@@ -236,16 +329,17 @@ class RpcCodeGenerator
                 ? $", {string.Join(", ", parameters.Select(p => $"{p.Type} {paramNames[parameters.IndexOf(p)]}"))}"
                 : string.Empty;
 
-            codeBuilder.AppendLine($"    public {(parametersIsNotNull ? string.Empty : "new ")}void CallFuncRpc({actionType} func, SendTo sendto, Delivery delivery{parametersDeclaration})");
+            codeBuilder.AppendLine($"    public {methodNew}void CallFuncRpc({actionType} func, SendTo sendto, Delivery delivery{parametersDeclaration})");
             codeBuilder.AppendLine("    {");
             codeBuilder.AppendLine($"        if (map_{paramKey} == null) map_{paramKey} = new()");
             codeBuilder.AppendLine("        {");
             foreach (var m in group)
             {
-                codeBuilder.AppendLine($"            {{ {m.Identifier.Text}, {methodIdMap[m]} }},");
+                codeBuilder.AppendLine($"            {{ {m.Identifier.Text}, {ownMethodIds[m]} }},");
             }
             codeBuilder.AppendLine("        };");
             codeBuilder.AppendLine();
+
             codeBuilder.AppendLine($"        if (!map_{paramKey}.ContainsKey(func)) throw new Exception(\"目标函数未注册\");");
             codeBuilder.AppendLine();
 
@@ -266,33 +360,22 @@ class RpcCodeGenerator
             codeBuilder.AppendLine("    }");
             codeBuilder.AppendLine();
         }
-        OverloadingCounter.Clear();
 
-        // 3. 生成方法反序列化调用
-        foreach (var method in rpcMethods)
+        // 3. 生成方法反序列化调用（protected供子类FuncRecorder引用；Segment作参数传递，避免跨类静态字段）
+        foreach (var method in ownMethods)
         {
             string methodName = method.Identifier.Text;
             var parameters = method.ParameterList.Parameters;
             var paramTypes = parameters.Select(p => p.Type.ToString()).ToList();
             var paramNames = parameters.Select((p, i) => $"param{i + 1}").ToList();
+            string invokeName = ownInvokeNames[method];
 
-            int count;
-            if (OverloadingCounter.ContainsKey(methodName))
-            {
-                OverloadingCounter[methodName] += 1;
-                count = OverloadingCounter[methodName];
-            }
-            else
-            {
-                OverloadingCounter.Add(methodName, 0);
-                count = 0;
-            }
-            codeBuilder.AppendLine($"    private void Invoke_{methodName}{count}(byte[] bytes)");
+            codeBuilder.AppendLine($"    protected void {invokeName}(byte[] bytes, Segment s)");
             codeBuilder.AppendLine("    {");
             if (parameters.Count != 0)
             {
-                codeBuilder.AppendLine("        int indexStart = RpcInvokeSegment.StartIndex+1;");
-                codeBuilder.AppendLine("        int invalidIndex = RpcInvokeSegment.StartIndex+RpcInvokeSegment.Length;");
+                codeBuilder.AppendLine("        int indexStart = s.StartIndex+1;");
+                codeBuilder.AppendLine("        int invalidIndex = s.StartIndex+s.Length;");
             }
 
             // 反序列化参数
@@ -310,14 +393,12 @@ class RpcCodeGenerator
         }
 
         // 4. 生成InvokeFunc方法
-        codeBuilder.AppendLine("    private static Segment RpcInvokeSegment;");
         codeBuilder.AppendLine("    public override bool InvokeFunc(byte[] bytes,Segment s)");
         codeBuilder.AppendLine("    {");
-        codeBuilder.AppendLine("        RpcInvokeSegment=s;");
         codeBuilder.AppendLine("        byte funcId = bytes[s.StartIndex];");
         codeBuilder.AppendLine("        if (FuncRecorder.TryGetValue(funcId, out var action))");
         codeBuilder.AppendLine("        {");
-        codeBuilder.AppendLine("            action.Invoke(this, bytes);");
+        codeBuilder.AppendLine("            action.Invoke(this, bytes, s);");
         codeBuilder.AppendLine("            return true;");
         codeBuilder.AppendLine("        }");
         codeBuilder.AppendLine("        else return false;");
@@ -384,4 +465,3 @@ class RpcCodeGenerator
         }
     }
 }
-
