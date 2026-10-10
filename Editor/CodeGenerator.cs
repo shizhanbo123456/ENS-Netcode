@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 class RpcCodeGenerator
 {
     private static readonly string sourceDir = "Assets/Scripts";
-    private static readonly string genDir = "Assets/EnsNetcode/Gen";
+    private static readonly string genDir = "Assets/ENS-Netcode/Gen";
 
     [UnityEditor.MenuItem("Ens/GenerateCode")]
     public static void GenCode()
@@ -126,6 +126,19 @@ class RpcCodeGenerator
         return generatedCount;
     }
 
+    //判断特性是否为Rpc标记：兼容[Rpc]、[RpcAttribute]及带命名空间前缀的写法
+    private static bool IsRpcAttribute(AttributeSyntax attr)
+    {
+        string name = attr.Name.ToString();
+        int dot = name.LastIndexOf('.');
+        if (dot >= 0) name = name.Substring(dot + 1);
+        if (name.EndsWith("Attribute") && name.Length > "Attribute".Length)
+        {
+            name = name.Substring(0, name.Length - "Attribute".Length);
+        }
+        return name == "Rpc";
+    }
+
     static bool GenerateCodeForClass(ClassDeclarationSyntax cls, string sourcePath, string genDir, CompilationUnitSyntax root)
     {
         string className = cls.Identifier.Text;
@@ -134,7 +147,7 @@ class RpcCodeGenerator
         // 获取带有Rpc属性的方法（排除已生成的代码）
         var rpcMethods = cls.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
-            .Where(m => m.AttributeLists.Any(a => a.Attributes.Any(attr => attr.Name.ToString() == "Rpc")))
+            .Where(m => m.AttributeLists.Any(a => a.Attributes.Any(IsRpcAttribute)))
             .Where(m => !m.AttributeLists.Any(a => a.ToString().Contains("GeneratedCode")))
             .ToList();
 
