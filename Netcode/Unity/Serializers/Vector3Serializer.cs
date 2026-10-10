@@ -5,8 +5,7 @@ public struct Vector3Serializer
 {
     public static bool Serialize(Vector3 value, byte[] result, ref int indexStart)
     {
-        // Vector3 = x(double 8) + y(double 8) + z(double 8) ¡ú ¹²24×Ö½Ú
-        if (result.Length - indexStart < 24) return false;
+        if (result.Length - indexStart < 12) return false;
 
         FloatSerializer.Serialize(value.x, result, ref indexStart);
         FloatSerializer.Serialize(value.y, result, ref indexStart);

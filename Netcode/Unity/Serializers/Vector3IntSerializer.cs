@@ -6,7 +6,6 @@ public struct Vector3IntSerializer
 {
     public static bool Serialize(Vector3Int value, byte[] result, ref int indexStart)
     {
-        // Vector3Int = x+y+z ¡ú 3*4=12×Ö½Ú
         if (result.Length - indexStart < 12) return false;
 
         IntSerializer.Serialize(value.x, result, ref indexStart);
