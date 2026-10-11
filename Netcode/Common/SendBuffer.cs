@@ -36,12 +36,18 @@ public class SendBuffer:Disposable
         if (MaxLength - indexStart > length) return;
         if (Empty()) return;
         onSend?.Invoke(bytes,indexStart);
+#if UNITY_2017_1_OR_NEWER
+        EnsProfilerCounters.AddSentBytes(indexStart);
+#endif
         indexStart = StartSeparatorLength;
     }
     internal void Flush()
     {
         if (Empty()) return;
         onSend?.Invoke(bytes, indexStart);
+#if UNITY_2017_1_OR_NEWER
+        EnsProfilerCounters.AddSentBytes(indexStart);
+#endif
         indexStart = StartSeparatorLength;
     }
     internal void Clear()

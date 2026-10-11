@@ -372,6 +372,7 @@ class RpcCodeGenerator
 
             codeBuilder.AppendLine($"    protected void {invokeName}(byte[] bytes, Segment s)");
             codeBuilder.AppendLine("    {");
+            codeBuilder.AppendLine($"        EnsProfilerCounters.CountInvoke(\"{fullName} :{methodName}\");");
             if (parameters.Count != 0)
             {
                 codeBuilder.AppendLine("        int indexStart = s.StartIndex+1;");

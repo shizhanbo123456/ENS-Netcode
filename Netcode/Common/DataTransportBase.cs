@@ -69,6 +69,9 @@ public abstract class DataTransportBase//具有信息收发功能
         segments.Clear();
         t_segments.Clear();
         if (data == null || data.Length == 0) return;
+#if UNITY_2017_1_OR_NEWER
+        EnsProfilerCounters.AddReceivedBytes(data.Length);
+#endif
 
         SplitDataBySeparator(data);
         if(raw)

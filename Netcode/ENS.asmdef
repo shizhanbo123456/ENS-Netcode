@@ -2,7 +2,8 @@
     "name": "ENS",
     "rootNamespace": "",
     "references": [
-        "GUID:5efd170ecd8084500bed5692932fe14e"
+        "GUID:5efd170ecd8084500bed5692932fe14e",
+        "Unity.Profiling.Core"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
