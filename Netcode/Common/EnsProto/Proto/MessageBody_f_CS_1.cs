@@ -5,6 +5,8 @@ namespace Ens.ProtoFormat
     //f 服务器接收 创建物体
     public struct MessageBody_f_CS
     {
+        public byte messageHeader => Header.f;
+        public ushort delivery;
         public short sendto;
         public bool spawnMode;//false:用behaviourCount; true:用idStart
         public short collectionId;
@@ -16,7 +18,9 @@ namespace Ens.ProtoFormat
     {
         public static bool Serialize(MessageBody_f_CS value, byte[] result, ref int indexStart)
         {
-            if (result.Length - indexStart < 2 + 1 + 2 + StringSerializer.GetLength(value.param ?? string.Empty) + 2) return false;
+            if (result.Length - indexStart < 3 + 2 + 1 + 2 + StringSerializer.GetLength(value.param ?? string.Empty) + 2) return false;
+            ByteSerializer.Serialize(value.messageHeader, result, ref indexStart);
+            UshortSerializer.Serialize(value.delivery, result, ref indexStart);
             ShortSerializer.Serialize(value.sendto, result, ref indexStart);
             BoolSerializer.Serialize(value.spawnMode, result, ref indexStart);
             ShortSerializer.Serialize(value.collectionId, result, ref indexStart);
@@ -27,7 +31,10 @@ namespace Ens.ProtoFormat
 
         public static MessageBody_f_CS Deserialize(byte[] data, ref int indexStart, int invalidIndex)
         {
-            if (data.Length - indexStart < 8) throw new Exception("反序列化失败：剩余数据字节数不足");
+            if (data.Length - indexStart < 3 + 8) throw new Exception("反序列化失败：剩余数据字节数不足");
+            byte msgHeader = ByteSerializer.Deserialize(data, ref indexStart, invalidIndex);
+            if (msgHeader != Header.f) throw new Exception($"消息类型不匹配：期望{Header.f}，实际{msgHeader}");
+            ushort delivery = UshortSerializer.Deserialize(data, ref indexStart, invalidIndex);
             short sendto = ShortSerializer.Deserialize(data, ref indexStart, invalidIndex);
             bool spawnMode = BoolSerializer.Deserialize(data, ref indexStart, invalidIndex);
             short collectionId = ShortSerializer.Deserialize(data, ref indexStart, invalidIndex);
@@ -37,7 +44,7 @@ namespace Ens.ProtoFormat
             if (spawnMode) idStart = ShortSerializer.Deserialize(data, ref indexStart, invalidIndex);
             else behaviourCount = ShortSerializer.Deserialize(data, ref indexStart, invalidIndex);
             if (indexStart > invalidIndex) throw new Exception("下标越界");
-            return new MessageBody_f_CS { sendto = sendto, spawnMode = spawnMode, collectionId = collectionId, param = param, behaviourCount = behaviourCount, idStart = idStart };
+            return new MessageBody_f_CS { delivery = delivery, sendto = sendto, spawnMode = spawnMode, collectionId = collectionId, param = param, behaviourCount = behaviourCount, idStart = idStart };
         }
     }
 }
