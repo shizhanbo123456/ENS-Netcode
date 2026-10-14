@@ -26,13 +26,13 @@ public class ClientRoomEventCenter
             Utils.Debug.LogError($"Room event {type} has no register");
         }
     }
-    public static void TrigEvent(Delivery delivery, int header, string content)
+    public static void TrigRpcEvent(Delivery delivery, int header, string content)
     {
         if (EnsInstance.Corr != null && EnsInstance.Corr.Client != null)
         {
             Writer.instance.t_type = header;
             Writer.instance.t_content = content;
-            EnsInstance.Corr.Client.Send(Header.M, delivery, Writer.instance);
+            EnsInstance.Corr.Client.Send(Header.N, delivery, Writer.instance);
         }
         else
         {
@@ -89,7 +89,7 @@ public class ClientRoomManagerEventCenter
             Utils.Debug.LogWarning($"Room manager event {type} has no register");
         }
     }
-    public static void TrigEvent(Delivery delivery,int header,string content)
+    public static void TrigRpcEvent(Delivery delivery,int header,string content)
     {
         if (EnsInstance.Corr != null && EnsInstance.Corr.Client != null)
         {
