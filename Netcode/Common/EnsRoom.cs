@@ -80,21 +80,21 @@ public class EnsRoom
         var c = ClientConnections[CurrentAuthorityAt];
         c.Send(Delivery.Reliable, new MessageBody_A_SC { authorityActive = true }, Pkt.scA);
     }
-    internal void ConnectionSend<TBody>(EnsConnection conn, Delivery delivery, TBody body, ProtoSender<TBody> proto) where TBody : struct
+    internal protected void ConnectionSend<TBody>(EnsConnection conn, Delivery delivery, TBody body, ProtoSender<TBody> proto) where TBody : struct
     {
         conn.Send(delivery, body, proto);
     }
-    internal void Broadcast<TBody>(Delivery delivery, TBody body, ProtoSender<TBody> proto) where TBody : struct
+    internal protected void Broadcast<TBody>(Delivery delivery, TBody body, ProtoSender<TBody> proto) where TBody : struct
     {
         foreach (var i in ClientConnections.Values) i.Send(delivery, body, proto);
     }
-    internal void Broadcast<TBody>(int ignore, Delivery delivery, TBody body, ProtoSender<TBody> proto) where TBody : struct
+    internal protected void Broadcast<TBody>(int ignore, Delivery delivery, TBody body, ProtoSender<TBody> proto) where TBody : struct
     {
         foreach (var i in ClientConnections.Values) 
             if (i.ClientId != ignore) 
                 i.Send(delivery, body, proto);
     }
-    internal void PTP<TBody>(short id, Delivery delivery, TBody body, ProtoSender<TBody> proto) where TBody : struct
+    internal protected void PTP<TBody>(short id, Delivery delivery, TBody body, ProtoSender<TBody> proto) where TBody : struct
     {
         if(ClientConnections.TryGetValue(id, out var conn))
         {
