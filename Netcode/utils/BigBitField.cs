@@ -135,7 +135,6 @@ public sealed class BigBitField : IDisposable
         if ((long)len + n > int.MaxValue - 8) throw new OverflowException("左移后位长超出 int 范围");
         int newLen = len + n;
         var result = new BigBitField(newLen + 16);
-        if (len == 0) return result; // 空数据左移仍为空
 
         int byteShift = n >> 3, bitShift = n & 7;
         int dataBytes = (len + 7) >> 3;
