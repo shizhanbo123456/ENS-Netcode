@@ -1,3 +1,4 @@
+using Ens.ProtoFormat;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -36,53 +37,29 @@ public sealed class EnsSpawner : MonoBehaviour
         }
         throw new System.Exception("[E]无对应的物体");
     }
-    private class Writer : MessageWriter
-    {
-        internal static Writer instance = new();
-        internal short totarget;
-        internal bool RespawnOrCreate;
-        internal short t_id;
-        internal string t_param;
-        internal short t_indexStart;
-
-        public int GetLength()
-        {
-            return 2 + 1 + 2 + StringSerializer.GetLength(t_param) + 2;
-        }
-        public bool Write(SendBuffer b)
-        {
-            return ShortSerializer.Serialize(totarget, b.bytes, ref b.indexStart)
-                && BoolSerializer.Serialize(RespawnOrCreate, b.bytes, ref b.indexStart)
-                && ShortSerializer.Serialize(t_id, b.bytes, ref b.indexStart)
-                && StringSerializer.Serialize(t_param, b.bytes, ref b.indexStart)
-                && ShortSerializer.Serialize(t_indexStart, b.bytes, ref b.indexStart);
-        }
-        public MessageWriter Clone()
-        {
-            return new Writer() { totarget=totarget,RespawnOrCreate=RespawnOrCreate,t_id=t_id,t_param=t_param,t_indexStart=t_indexStart};
-        }
-        public void Dispose()
-        {
-
-        }
-    }
     public void CreateServerRpc(SendTo sendto, short id,string param)
     {
-        Writer.instance.totarget = sendto.Target;
-        Writer.instance.RespawnOrCreate = false;
-        Writer.instance.t_id = id;
-        Writer.instance.t_param = param;
-        Writer.instance.t_indexStart =GetBehaviourCount(id);
-        EnsInstance.Corr.Client.Send(Header.fcs, Delivery.Reliable,Writer.instance);
+        var body = new MessageBody_f_CS
+        {
+            sendto = sendto.Target,
+            spawnMode = false,
+            collectionId = id,
+            param = param,
+            behaviourCount = GetBehaviourCount(id),
+        };
+        EnsInstance.Corr.Client.Send(Delivery.Reliable, body, Pkt.csf);
     }
     public void RespawnCheckServerRpc(SendTo sendto, EnsBehaviourCollection collection, string param)
     {
-        Writer.instance.totarget = sendto.Target;
-        Writer.instance.RespawnOrCreate = true;
-        Writer.instance.t_id = collection.CollectionId;
-        Writer.instance.t_param = param;
-        Writer.instance.t_indexStart = collection.Behaviors[0].ObjectId;
-        EnsInstance.Corr.Client.Send(Header.fcs, Delivery.Reliable, Writer.instance);
+        var body = new MessageBody_f_CS
+        {
+            sendto = sendto.Target,
+            spawnMode = true,
+            collectionId = collection.CollectionId,
+            param = param,
+            idStart = collection.Behaviors[0].ObjectId,
+        };
+        EnsInstance.Corr.Client.Send(Delivery.Reliable, body, Pkt.csf);
     }
 
     public void CreateLocal(short id,string param,short idStart)

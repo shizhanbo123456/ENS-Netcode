@@ -1,3 +1,4 @@
+using Ens.ProtoFormat;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -113,56 +114,20 @@ public abstract class EnsBehaviour : MonoBehaviour
     }
     public void Send(Delivery delivery, SendTo sendto)
     {
-        Writer.instance.activeObjectId = ObjectId;
-        Writer.instance.activeTarget = sendto;
-        Writer.instance.body=BytesPool.GetBuffer(EnsTemporaryBuffer.bytes.Length);
-        Buffer.BlockCopy(EnsTemporaryBuffer.bytes, 0, Writer.instance.body, 0, EnsTemporaryBuffer.length);
-        Writer.instance.length = EnsTemporaryBuffer.length;
-        //发送字节
-        EnsInstance.Corr.Client.Send(Header.Fcs,delivery, Writer.instance);
-    }
-    private class Writer : MessageWriter
-    {
-        internal static Writer instance = new();
-        internal short activeObjectId;
-        internal SendTo activeTarget;
-        internal byte[] body;
-        internal int length;
-
-        public int GetLength()
+        //EnsTemporaryBuffer 首位是函数标识，其后是参数字节
+        var body = new MessageBody_F_CS
         {
-            return sizeof(short) + length + sizeof(short);
-        }
-        public bool Write(SendBuffer b)
-        {
-            if (b.bytes.Length - b.indexStart < length + 4) return false;
-            ShortSerializer.Serialize(activeObjectId, b.bytes, ref b.indexStart);
-            Buffer.BlockCopy(body, 0, b.bytes, b.indexStart,length);
-            b.indexStart += length;
-            ShortSerializer.Serialize(activeTarget.Target, b.bytes, ref b.indexStart);
-            return true;
-        }
-        public MessageWriter Clone()
-        {
-            byte[] newBody = BytesPool.GetBuffer(length);
-            Buffer.BlockCopy(body,0,newBody,0,length);
-            return new Writer
-            {
-                activeObjectId = activeObjectId,
-                activeTarget = activeTarget,
-                body = newBody,
-                length = length
-            };
-        }
-        public void Dispose()
-        {
-            BytesPool.ReturnBuffer(body);
-        }
+            NOMObjectId = ObjectId,
+            func = EnsTemporaryBuffer.bytes[0],
+            param = (EnsTemporaryBuffer.bytes, new Segment(1, EnsTemporaryBuffer.length - 1)),
+            target = sendto.Target,
+        };
+        EnsInstance.Corr.Client.Send(delivery, body, Pkt.csF);
     }
     /// <summary>
-    /// 传入的s的片段仅包含(byte func)[bytes param]部分
+    /// 传入的s的片段仅包含[bytes param]部分，格式由func决定
     /// </summary>
-    public virtual bool InvokeFunc(byte[] bytes, Segment s)
+    public virtual bool InvokeFunc(byte func, byte[] bytes, Segment s)
     {
         return false;
     }

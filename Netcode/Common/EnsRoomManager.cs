@@ -1,3 +1,4 @@
+using Ens.ProtoFormat;
 using System.Collections.Generic;
 using System.Linq;
 using Utils;
@@ -84,37 +85,11 @@ public class EnsRoomManager
     {
         if (EnsInstance.Corr != null && EnsInstance.Corr.Client != null)
         {
-            Writer.instance.t_type = header;
-            Writer.instance.t_content = content;
-            conn.Send(Header.Msc, delivery, Writer.instance);
+            conn.Send(delivery, new MessageBody_M_SC { type = header, content = content }, Pkt.scM);
         }
         else
         {
             Utils.Debug.LogError("当前状态不能发送消息");
-        }
-    }
-    private class Writer : MessageWriter
-    {
-        internal static Writer instance = new();
-        internal int t_type;
-        internal string t_content;
-
-        public int GetLength()
-        {
-            return sizeof(int) + StringSerializer.GetLength(t_content);
-        }
-        public bool Write(SendBuffer b)
-        {
-            return IntSerializer.Serialize(t_type, b.bytes, ref b.indexStart) &&
-                StringSerializer.Serialize(t_content, b.bytes, ref b.indexStart);
-        }
-        public MessageWriter Clone()
-        {
-            return new Writer() { t_type = t_type, t_content = t_content };
-        }
-        public void Dispose()
-        {
-
         }
     }
     public override string ToString()

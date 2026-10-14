@@ -374,7 +374,7 @@ class RpcCodeGenerator
             codeBuilder.AppendLine("    {");
             if (parameters.Count != 0)
             {
-                codeBuilder.AppendLine("        int indexStart = s.StartIndex+1;");
+                codeBuilder.AppendLine("        int indexStart = s.StartIndex;");
                 codeBuilder.AppendLine("        int invalidIndex = s.StartIndex+s.Length;");
             }
 
@@ -393,10 +393,9 @@ class RpcCodeGenerator
         }
 
         // 4. 生成InvokeFunc方法
-        codeBuilder.AppendLine("    public override bool InvokeFunc(byte[] bytes,Segment s)");
+        codeBuilder.AppendLine("    public override bool InvokeFunc(byte func, byte[] bytes,Segment s)");
         codeBuilder.AppendLine("    {");
-        codeBuilder.AppendLine("        byte funcId = bytes[s.StartIndex];");
-        codeBuilder.AppendLine("        if (FuncRecorder.TryGetValue(funcId, out var action))");
+        codeBuilder.AppendLine("        if (FuncRecorder.TryGetValue(func, out var action))");
         codeBuilder.AppendLine("        {");
         codeBuilder.AppendLine("            action.Invoke(this, bytes, s);");
         codeBuilder.AppendLine("            return true;");

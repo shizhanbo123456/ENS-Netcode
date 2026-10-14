@@ -17,10 +17,10 @@ internal class ENCLocalClient : EnsClient
         _buffer = new SendBuffer(OnSend);
         DeliverySource = DeliverySource.Get();
     }
-    internal override void Send(byte messageType, Delivery delivery, MessageWriter writer = null)
+    internal override SendBuffer GetSendBuffer()
     {
-        if (!_on || _buffer == null || DeliverySource == null) return;
-        Send(_buffer, messageType, DeliverySource.DeliveryToId(delivery), writer);
+        if (!_on || _buffer == null || DeliverySource == null) return null;
+        return _buffer;
     }
     private void OnSend(byte[] bytes, int length)
     {

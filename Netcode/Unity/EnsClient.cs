@@ -1,3 +1,4 @@
+using Ens.ProtoFormat;
 using ProtocolWrapper;
 using System;
 using Utils;
@@ -7,8 +8,6 @@ using Utils;
 /// </summary>
 internal class EnsClient:DataTransportBase
 {
-    protected KeyLibrary KeyLibrary;
-
     private ProtocolBase Client;
 
     private float heartbeatSendTime;
@@ -30,42 +29,21 @@ internal class EnsClient:DataTransportBase
         if (KeyLibrary == null && Client != null && Client.Initialized)
             KeyLibrary = new KeyLibrary(Client.SendBuffer, DeliverySource);
     }
-    internal override void Send(byte messageType, Delivery delivery, MessageWriter writer = null)
+    internal override SendBuffer GetSendBuffer()
     {
         EnsureInitialized();
         if (Client == null || !Client.Initialized || KeyLibrary == null)
         {
             Debug.LogWarning("客户端初始化中");
-            return;
+            return null;
         }
-        KeyLibrary.OnSend(messageType, delivery, writer);
-    }
-    //心跳包写入本机当前时间(ms)，服务器回显后由客户端换算延迟
-    private class HeartBeatMessageWriter : MessageWriter
-    {
-        internal static HeartBeatMessageWriter instance = new();
-
-        public int GetLength()
-        {
-            return sizeof(int);
-        }
-        public bool Write(SendBuffer buffer)
-        {
-            return IntSerializer.Serialize((int)(Time.time * 1000), buffer.bytes, ref buffer.indexStart);
-        }
-        public MessageWriter Clone()
-        {
-            return new HeartBeatMessageWriter();
-        }
-        public void Dispose()
-        {
-        }
+        return Client.SendBuffer;
     }
     //发送心跳包(携带本机时间戳)
     protected void SendHeartbeat()
     {
         hbSendTime = Time.time + EnsInstance.HeartbeatMsgInterval;
-        Send(Header.Hcs, Delivery.Unreliable, HeartBeatMessageWriter.instance);
+        Send(Delivery.Unreliable, new MessageBody_H_CS { clientMillisecond = (int)(Time.time * 1000) }, Pkt.csH);
     }
     internal override void Update()
     {
@@ -123,7 +101,7 @@ internal class EnsClient:DataTransportBase
         {
             if (client != null && client.Initialized && !client.Cancelled)
             {
-                Send(Header.Dcs, Delivery.Unreliable);
+                DataTransportBase.SendFrame(client.SendBuffer, DeliverySource.DeliveryToId(Delivery.Unreliable), default(MessageBody_D_CS), Pkt.csD);
                 client.SendBuffer?.Flush();
             }
         }
