@@ -6,6 +6,8 @@ using System.Collections.Generic;
 
 public class EnsInstance
 {
+    public static bool enableBitTransform=true;
+
 #if UNITY_2017_1_OR_NEWER
     public static EnsCorrespondent Corr;
     public static EnsSpawner EnsSpawner;

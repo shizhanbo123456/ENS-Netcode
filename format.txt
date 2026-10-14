@@ -1,6 +1,6 @@
 每次会把下列各语句合并，并用*分隔，一起发送
 
-(byte messageHeader)(ushort delivery)[body](2byte messageLength)
+(byte messageHeader)(ushort delivery){body}(2byte messageLength)
 messageLength有特殊编码
 messageType和messageLength都必定不包含Separator
 
@@ -73,10 +73,10 @@ Q:
 
 M:
 >>服务器接收
-(int type)(bytes content)
+(int type)(string content)
 
 >>客户端接收
-(int type)(bytes content)
+(int type)(string content)
 
 
 N:
