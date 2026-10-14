@@ -1,6 +1,6 @@
 using System;
 
-namespace ProtoFormat
+namespace Ens.ProtoFormat
 {
     //H 服务器接收 心跳检测
     public struct MessageBody_H_CS

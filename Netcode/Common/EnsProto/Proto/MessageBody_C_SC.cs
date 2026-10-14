@@ -1,6 +1,6 @@
 using System;
 
-namespace ProtoFormat
+namespace Ens.ProtoFormat
 {
     //C 客户端接收 分配Id
     public struct MessageBody_C_SC

@@ -1,6 +1,6 @@
 using System;
 
-namespace ProtoFormat
+namespace Ens.ProtoFormat
 {
     //D 客户端接收 断开连接(无消息体)
     public struct MessageBody_D_SC

@@ -1,6 +1,6 @@
 using System;
 
-namespace ProtoFormat
+namespace Ens.ProtoFormat
 {
     //R 客户端接收 离开房间重置(无消息体)
     public struct MessageBody_R_SC

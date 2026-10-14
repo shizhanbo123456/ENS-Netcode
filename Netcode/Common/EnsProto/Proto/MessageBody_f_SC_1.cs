@@ -1,6 +1,6 @@
 using System;
 
-namespace ProtoFormat
+namespace Ens.ProtoFormat
 {
     //f 客户端接收 创建物体
     public struct MessageBody_f_SC

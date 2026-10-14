@@ -1,6 +1,6 @@
 using System;
 
-namespace ProtoFormat
+namespace Ens.ProtoFormat
 {
     //A 服务器接收 设置房主权限
     public struct MessageBody_A_CS
