@@ -39,5 +39,10 @@ namespace Ens.ProtoFormat
             if (indexStart > invalidIndex) throw new Exception("下标越界");
             return new MessageBody_f_SC { delivery = delivery, spawnMode = spawnMode, collectionId = collectionId, param = param, idStart = idStart };
         }
+
+        public static int GetLength(MessageBody_f_SC value)
+        {
+            return 3 + 1 + 2 + StringSerializer.GetLength(value.param ?? string.Empty) + 2;
+        }
     }
 }

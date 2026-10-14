@@ -27,5 +27,10 @@ namespace Ens.ProtoFormat
             if (indexStart > invalidIndex) throw new Exception("下标越界");
             return new MessageBody_D_CS { delivery = delivery };
         }
+
+        public static int GetLength(MessageBody_D_CS value)
+        {
+            return 3;
+        }
     }
 }

@@ -47,5 +47,10 @@ namespace Ens.ProtoFormat
             if (indexStart > invalidIndex) throw new Exception("下标越界");
             return new MessageBody_F_CS { delivery = delivery, NOMObjectId = NOMObjectId, func = func, param = param, target = target };
         }
+
+        public static int GetLength(MessageBody_F_CS value)
+        {
+            return 3 + 2 + 1 + 1 + value.param.segment.Length + 2;
+        }
     }
 }

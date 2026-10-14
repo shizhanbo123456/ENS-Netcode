@@ -33,5 +33,10 @@ namespace Ens.ProtoFormat
             if (indexStart > invalidIndex) throw new Exception("下标越界");
             return new MessageBody_Q_SC { delivery = delivery, header = header, content = content };
         }
+
+        public static int GetLength(MessageBody_Q_SC value)
+        {
+            return 3 + StringSerializer.GetLength(value.header ?? string.Empty) + StringSerializer.GetLength(value.content ?? string.Empty);
+        }
     }
 }
