@@ -160,7 +160,7 @@ public abstract class EnsBehaviour : MonoBehaviour
         }
     }
     /// <summary>
-    /// 传入的s的片段仅包含(byte func)[string param]部分
+    /// 传入的s的片段仅包含(byte func)[bytes param]部分
     /// </summary>
     public virtual bool InvokeFunc(byte[] bytes, Segment s)
     {
