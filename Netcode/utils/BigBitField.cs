@@ -1,7 +1,7 @@
 using System;
 
 // 任意位数的位域。内部小端只存有效数据（Count 位），标识位不占内部缓冲，仅由 ToBytes() 在导出时
-// 补在最高有效位之后、用于标识有效范围：载荷长 Count/8 + 1 字节，接收方（FromBytes）找最高 1 位即还原位数；
+// 补在最高有效位之后、用于标识有效范围：载荷长 Count/8 + 1 字节，接收方（FromBytes）在给定 Segment 内找最高 1 位即还原位数；
 // 空数据无标识位、导出 0 字节。缓冲来自 BytesPool，Dispose 后 _buf 为 null。
 public sealed class BigBitField : IDisposable
 {
@@ -87,19 +87,20 @@ public sealed class BigBitField : IDisposable
         return true;
     }
 
-    // 从载荷还原（与 ToBytes 配对）：标识位 = 最高 1 位，往上找第一个非 0 字节即可；全 0 载荷还原为空位域
-    public static BigBitField FromBytes(byte[] bytes)
+    // 从指定范围还原（与 ToBytes 配对）。Segment = [StartIndex, StartIndex + Length)，范围之外的数据不参与；
+    // 标识位 = 范围内最高的 1，全 0 范围还原为空位域。
+    public static BigBitField FromBytes(byte[] bytes, Segment segment)
     {
-        int top = bytes.Length - 1;
-        while (top >= 0 && bytes[top] == 0) top--;
-        if (top < 0) return new BigBitField(); // 无标识位 → 空数据
+        int top = segment.StartIndex + segment.Length - 1;
+        while (top >= segment.StartIndex && bytes[top] == 0) top--;
+        if (top < segment.StartIndex) return new BigBitField(); // 无标识位 → 空数据
 
-        int markerIndex = top * 8 + HighestBitOffset(bytes[top]);
+        int markerIndex = (top - segment.StartIndex) * 8 + HighestBitOffset(bytes[top]); // 位数相对范围起点
         var result = new BigBitField(markerIndex + 16);
-        Array.Copy(bytes, result._buf, Math.Min(bytes.Length, result._buf.Length));
+        Array.Copy(bytes, segment.StartIndex, result._buf, 0, Math.Min(segment.Length, result._buf.Length));
         result._count = markerIndex;
         int rem = markerIndex & 7;
-        result._buf[top] &= (byte)((1 << rem) - 1); // 连标识位本身一起清掉，内部只留数据
+        result._buf[top - segment.StartIndex] &= (byte)((1 << rem) - 1); // 连标识位本身一起清掉，内部只留数据
         return result;
     }
 
