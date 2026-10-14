@@ -1,42 +1,33 @@
 using System;
 
-/// <summary>
-/// 支持任意位数的位运算数据结构，支持逐位写入，内部缓冲可直接转 byte[] 网络传输。
-///
-/// 存储布局（小端字节序）：[有效数据 bits 0..Count-1][标识位 1][空数据 0...]
-/// 标识位固定位于 bit index = Count，且始终是存储中的最高 1 位：
-/// - 写入：数据位写到 Count 处，标识位上移一位（每写 1 位 O(1)，无数据搬移）；
-/// - ToBytes()：只导出到标识位所在字节；接收方找载荷最高 1 位即可还原有效位数，
-///   无需额外长度字段，带宽开销仅 1 bit；
-/// - 空数据 = 无标识位，ToBytes() 为 0 字节，与"数据全 0"（有标识位）天然区分。
-/// </summary>
+// 任意位数的位域。小端存储：[有效数据 Count 位][标识位 1][空数据 0...]，标识位固定在 bit index = Count，
+// 故载荷自描述：接收方找最高 1 位即还原位数，无需长度字段，带宽开销仅 1 bit；空数据无标识位，导出 0 字节。
+// 缓冲来自 BytesPool，Dispose 后 _buf 为 null。
 public sealed class BigBitField : IDisposable
 {
     private byte[] _buf;  // 小端字节序，_buf[0] 是最低 8 位
     private int _count;   // 有效数据位数；标识位位于 bit index _count
+    public int Count => _count;// 有效数据位数（不含标识位）
 
-    /// <summary>创建空位域。capacityBits 为初始数据容量（位），写入超出时按倍增扩容。</summary>
+    // capacityBits 为初始数据容量（位），写入超出时倍增扩容
     public BigBitField(int capacityBits = 64)
     {
         if (capacityBits < 0) throw new ArgumentOutOfRangeException(nameof(capacityBits));
         _count = 0;
-        _buf = new byte[Math.Max(1, (capacityBits + 8) / 8)]; // 容纳 capacityBits 数据 + 1 标识位
+        // 池内数组已清零，长度按档位可能大于请求值
+        _buf = BytesPool.GetBuffer(Math.Max(1, (capacityBits + 8) / 8));
     }
 
-    /// <summary>销毁：释放内部存储（托管数组，之后不可再使用本实例）。</summary>
+    // 归还缓冲并置 _buf = null（null 即已销毁），重复调用安全
     public void Dispose()
     {
-        _buf = Array.Empty<byte>();
+        if (_buf == null) return;
+        BytesPool.ReturnBuffer(_buf);
+        _buf = null;
         _count = 0;
     }
 
-    /// <summary>有效数据位数（不含标识位）。最新写入的位位于 Count-1（最高位）。</summary>
-    public int Count => _count;
-
-    /// <summary>
-    /// 在最高位追加 1 位（最新写入的数据位于最高位，有效长度 +1）。
-    /// 只改 2 个位（数据位 + 新标识位），无任何数据搬移，O(1) 摊还。
-    /// </summary>
+    // 在最高位追加 1 位：只改数据位和新标识位，无数据搬移，O(1)
     public void WriteBit(bool value)
     {
         EnsureCapacity(_count + 2);
@@ -46,7 +37,7 @@ public sealed class BigBitField : IDisposable
         _count++;
     }
 
-    /// <summary>追加 value 的低 bitCount 位（value 的最低位先写入、落在最低处）。</summary>
+    // 追加 value 的低 bitCount 位（最低位先写、落在最低处）
     public void WriteBits(ulong value, int bitCount)
     {
         if (bitCount < 0 || bitCount > 64) throw new ArgumentOutOfRangeException(nameof(bitCount));
@@ -54,7 +45,7 @@ public sealed class BigBitField : IDisposable
             WriteBit((value & (1ul << i)) != 0);
     }
 
-    /// <summary>读取第 index 位有效数据（0 = 最早写入的位）。标识位不可通过此接口访问。</summary>
+    // 读第 index 位有效数据（0 = 最早写入的位）
     public bool this[int index]
     {
         get
@@ -64,23 +55,19 @@ public sealed class BigBitField : IDisposable
         }
     }
 
-    /// <summary>
-    /// 导出载荷字节：有效数据 + 标识位，共 Count/8 + 1 字节（比纯数据多至多 1 字节）。
-    /// 标识位之上（空数据区）不导出；空数据导出为 0 字节。
-    /// </summary>
+    // 导出载荷 = 有效数据 + 标识位，共 Count/8 + 1 字节，空位域返回 Array.Empty。
+    // 返回的是池缓冲，长度按档位可能大于载荷：须 BytesPool.ReturnBuffer 归还，载荷长度以 Count 推算而非数组 Length。
     public byte[] ToBytes()
     {
+        if (_buf == null) throw new ObjectDisposedException(nameof(BigBitField)); // 已销毁与空位域都是 Count==0，必须靠 _buf 区分
         if (_count == 0) return Array.Empty<byte>();
-        var bytes = new byte[(_count >> 3) + 1];
-        Array.Copy(_buf, bytes, bytes.Length);
+        int len = (_count >> 3) + 1;
+        var bytes = BytesPool.GetBuffer(len);
+        Array.Copy(_buf, bytes, len);
         return bytes;
     }
 
-    /// <summary>
-    /// 从载荷字节构造（与 ToBytes 配对）。标识位 = 载荷最高 1 位：
-    /// 标识位之上恒为 0，故从最高字节向下找第一个非 0 字节即是，O(1)。
-    /// 空/全 0 载荷还原为空位域。
-    /// </summary>
+    // 从载荷还原（与 ToBytes 配对）：标识位 = 最高 1 位，往上找第一个非 0 字节即可；全 0 载荷还原为空位域
     public static BigBitField FromBytes(byte[] bytes)
     {
         int top = bytes.Length - 1;
@@ -98,7 +85,7 @@ public sealed class BigBitField : IDisposable
 
     // ---------- 符号位运算（操作双方的有效数据区，结果自动重建标识位） ----------
 
-    /// <summary>按位与，结果有效长度取两者较小值。</summary>
+    // 按位与，取较短长度
     public static BigBitField operator &(BigBitField a, BigBitField b)
     {
         int len = Math.Min(a._count, b._count);
@@ -107,7 +94,7 @@ public sealed class BigBitField : IDisposable
         return result;
     }
 
-    /// <summary>按位或，结果有效长度取两者较大值。</summary>
+    // 按位或，取较长长度
     public static BigBitField operator |(BigBitField a, BigBitField b)
     {
         int len = Math.Max(a._count, b._count);
@@ -116,7 +103,7 @@ public sealed class BigBitField : IDisposable
         return result;
     }
 
-    /// <summary>按位异或，结果有效长度取两者较大值。</summary>
+    // 按位异或，取较长长度
     public static BigBitField operator ^(BigBitField a, BigBitField b)
     {
         int len = Math.Max(a._count, b._count);
@@ -125,7 +112,7 @@ public sealed class BigBitField : IDisposable
         return result;
     }
 
-    /// <summary>按位取反（在有效数据范围内翻转，长度不变）。</summary>
+    // 按位取反，长度不变
     public static BigBitField operator ~(BigBitField a)
     {
         int len = a._count;
@@ -138,7 +125,7 @@ public sealed class BigBitField : IDisposable
         return result;
     }
 
-    /// <summary>左移 n 位（数据整体上移，低位补 0，有效长度 +n）；n 为负等价右移。</summary>
+    // 左移 n 位（低位补 0，长度 +n）；n 为负等价右移
     public static BigBitField operator <<(BigBitField a, int n)
     {
         if (n < 0) return a >> -n;
@@ -164,7 +151,7 @@ public sealed class BigBitField : IDisposable
         return result;
     }
 
-    /// <summary>右移 n 位（数据整体下移，高位补 0，有效长度 -n）；n 为负等价左移。</summary>
+    // 右移 n 位（高位补 0，长度 -n）；n 为负等价左移
     public static BigBitField operator >>(BigBitField a, int n)
     {
         if (n < 0) return a << -n;
@@ -196,17 +183,22 @@ public sealed class BigBitField : IDisposable
     {
         int needed = (bits + 7) >> 3;
         if (needed <= _buf.Length) return;
-        Array.Resize(ref _buf, Math.Max(needed, Math.Max(4, _buf.Length * 2)));
+        int newSize = Math.Max(needed, Math.Max(4, _buf.Length * 2));
+        // 扩容走池：取新缓冲 → 拷贝 → 归还旧的
+        var grown = BytesPool.GetBuffer(newSize);
+        Array.Copy(_buf, grown, _buf.Length);
+        BytesPool.ReturnBuffer(_buf);
+        _buf = grown;
     }
 
-    /// <summary>把 len..len+7 范围内的杂散位清零（结果最高数据字节的掩码）。</summary>
+    // 清除 len..len+7 的杂散位（结果最高数据字节的掩码）
     private static void MaskTop(BigBitField f, int len)
     {
         int rem = len & 7;
         if (rem != 0) f._buf[len >> 3] &= (byte)((1 << rem) - 1);
     }
 
-    /// <summary>在 bit index = count 处设置标识位。</summary>
+    // 在 bit index = count 处设标识位
     private static void SetMarker(BigBitField f, int count)
     {
         f._count = count;
@@ -222,7 +214,7 @@ public sealed class BigBitField : IDisposable
         SetMarker(result, len);
     }
 
-    /// <summary>字节内最高 1 位的偏移（0..7）；输入非 0。</summary>
+    // 字节内最高 1 位的偏移（0..7），输入非 0
     private static int HighestBitOffset(int b)
     {
         for (int i = 7; i >= 0; i--)
