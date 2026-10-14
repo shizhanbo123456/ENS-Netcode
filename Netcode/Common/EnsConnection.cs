@@ -14,8 +14,6 @@ public class EnsConnection:DataTransportBase
 
     private Action<EnsConnection> OnShutDown;
 
-    internal int delay = 20;//20ms
-
     protected bool _on;
     private bool shutdownStarted;
 

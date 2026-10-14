@@ -30,6 +30,7 @@ internal class ENCLocalClient : EnsClient
     }
     internal override void Update()
     {
+        if (Utils.Time.time > hbSendTime) SendHeartbeat();
         var buffer = ReceivedData;
         while (buffer.Read(out var data) && _on)
         {

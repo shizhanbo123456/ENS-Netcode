@@ -40,6 +40,33 @@ internal class EnsClient:DataTransportBase
         }
         KeyLibrary.OnSend(messageType, delivery, writer);
     }
+    //心跳包写入本机当前时间(ms)，服务器回显后由客户端换算延迟
+    private class HeartBeatMessageWriter : MessageWriter
+    {
+        internal static HeartBeatMessageWriter instance = new();
+
+        public int GetLength()
+        {
+            return sizeof(int);
+        }
+        public bool Write(SendBuffer buffer)
+        {
+            return IntSerializer.Serialize((int)(Time.time * 1000), buffer.bytes, ref buffer.indexStart);
+        }
+        public MessageWriter Clone()
+        {
+            return new HeartBeatMessageWriter();
+        }
+        public void Dispose()
+        {
+        }
+    }
+    //发送心跳包(携带本机时间戳)
+    protected void SendHeartbeat()
+    {
+        hbSendTime = Time.time + EnsInstance.HeartbeatMsgInterval;
+        Send(Header.H, Delivery.Unreliable, HeartBeatMessageWriter.instance);
+    }
     internal override void Update()
     {
         if (Client == null) return;
@@ -56,8 +83,7 @@ internal class EnsClient:DataTransportBase
         }
         if (Time.time>hbSendTime)
         {
-            hbSendTime= Time.time+EnsInstance.HeartbeatMsgInterval;
-            Send(Header.H, Delivery.Unreliable);
+            SendHeartbeat();
         }
         if (!Client.Initialized || KeyLibrary == null) return;
         var buffer = Client.ReceiveBuffer;

@@ -43,10 +43,10 @@ f:
 
 H:
 >>服务器接收                心跳检测
-(int millisecondInServerMsg)
+(int clientMillisecond)
 
 >>客户端接收                心跳检测
-(int serverMillisecond)(int delay)
+(int clientMillisecond)
 
 D
 >>服务器接收

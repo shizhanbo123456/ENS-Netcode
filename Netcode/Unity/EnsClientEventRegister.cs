@@ -78,33 +78,10 @@ public class EnsClientEventRegister
         {
             int index = MessageReader.BodyIndexStart(s);
             int invalidIndex = MessageReader.BodyIndexInvalid(s);
-            H_MessageWriter.instance.t_serverTime = IntSerializer.Deserialize(b, ref index, invalidIndex);
-            var delay = IntSerializer.Deserialize(b, ref index, invalidIndex);
-            EnsInstance.LocalClientDelay = delay;
-            EnsInstance.Corr.Client?.Send(Header.H, Delivery.Unreliable,H_MessageWriter.instance);
+            //回包回显的是本机发送时刻，据此换算单程延迟
+            int clientMillisecond = IntSerializer.Deserialize(b, ref index, invalidIndex);
+            EnsInstance.LocalClientDelay = ((int)(Time.time * 1000) - clientMillisecond) / 2;
         });
-    }
-    internal class H_MessageWriter : MessageWriter
-    {
-        internal static H_MessageWriter instance = new();
-        internal int t_serverTime;
-
-        public int GetLength()
-        {
-            return sizeof(int);
-        }
-        public bool Write(SendBuffer b)
-        {
-            return IntSerializer.Serialize(t_serverTime, b.bytes, ref b.indexStart);
-        }
-        public MessageWriter Clone()
-        {
-            return new H_MessageWriter() { t_serverTime=t_serverTime};
-        }
-        public void Dispose()
-        {
-
-        }
     }
     protected static void Client_D()
     {

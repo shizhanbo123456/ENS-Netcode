@@ -40,16 +40,36 @@ public class EnsServerEventRegister
     }
     protected static void Server_H()
     {
+        //回显客户端时间戳，由客户端自行换算延迟
         MessageHandlerServer.Regist(Header.H,(conn, b, s) =>
         {
             int index = MessageReader.BodyIndexStart(s);
             int invalidIndex=MessageReader.BodyIndexInvalid(s);
-            if (invalidIndex - index >= 4)
-            {
-                var d = IntSerializer.Deserialize(b, ref index, invalidIndex);
-                conn.delay = ((int)(Utils.Time.time * 1000) - d) / 2;
-            }
+            H_MessageWriter.instance.clientMillisecond = IntSerializer.Deserialize(b, ref index, invalidIndex);
+            conn.Send(Header.H, Delivery.Unreliable, H_MessageWriter.instance);
         });
+    }
+    private class H_MessageWriter : MessageWriter
+    {
+        internal static H_MessageWriter instance=new();
+        internal int clientMillisecond;
+
+        public int GetLength()
+        {
+            return sizeof(int);
+        }
+        public bool Write(SendBuffer buffer)
+        {
+            return IntSerializer.Serialize(clientMillisecond, buffer.bytes, ref buffer.indexStart);
+        }
+        public MessageWriter Clone()
+        {
+            return new H_MessageWriter() { clientMillisecond=clientMillisecond};
+        }
+        public void Dispose()
+        {
+
+        }
     }
     protected static void Server_D()
     {
