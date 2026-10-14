@@ -5,7 +5,7 @@ namespace Ens.ProtoFormat
     //A 服务器接收 设置房主权限
     public struct MessageBody_A_CS
     {
-        public byte messageHeader => Header.A;
+        public byte messageHeader => Header.Acs;
         public ushort delivery;
         public short clientId;
     }
@@ -24,7 +24,7 @@ namespace Ens.ProtoFormat
         {
             if (data.Length - indexStart < 3 + 2) throw new Exception("反序列化失败：剩余数据字节数不足");
             byte msgHeader = ByteSerializer.Deserialize(data, ref indexStart, invalidIndex);
-            if (msgHeader != Header.A) throw new Exception($"消息类型不匹配：期望{Header.A}，实际{msgHeader}");
+            if (msgHeader != Header.Acs) throw new Exception($"消息类型不匹配：期望{Header.Acs}，实际{msgHeader}");
             ushort delivery = UshortSerializer.Deserialize(data, ref indexStart, invalidIndex);
             short clientId = ShortSerializer.Deserialize(data, ref indexStart, invalidIndex);
             if (indexStart > invalidIndex) throw new Exception("下标越界");

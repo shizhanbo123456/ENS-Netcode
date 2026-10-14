@@ -73,7 +73,7 @@ public sealed class EnsSpawner : MonoBehaviour
         Writer.instance.t_id = id;
         Writer.instance.t_param = param;
         Writer.instance.t_indexStart =GetBehaviourCount(id);
-        EnsInstance.Corr.Client.Send(Header.f, Delivery.Reliable,Writer.instance);
+        EnsInstance.Corr.Client.Send(Header.fcs, Delivery.Reliable,Writer.instance);
     }
     public void RespawnCheckServerRpc(SendTo sendto, EnsBehaviourCollection collection, string param)
     {
@@ -82,7 +82,7 @@ public sealed class EnsSpawner : MonoBehaviour
         Writer.instance.t_id = collection.CollectionId;
         Writer.instance.t_param = param;
         Writer.instance.t_indexStart = collection.Behaviors[0].ObjectId;
-        EnsInstance.Corr.Client.Send(Header.f, Delivery.Reliable, Writer.instance);
+        EnsInstance.Corr.Client.Send(Header.fcs, Delivery.Reliable, Writer.instance);
     }
 
     public void CreateLocal(short id,string param,short idStart)

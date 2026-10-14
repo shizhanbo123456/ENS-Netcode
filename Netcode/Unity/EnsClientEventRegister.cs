@@ -49,7 +49,7 @@ public class EnsClientEventRegister
     protected static void Client_C()
     {
         //成功连接
-        MessageHandlerClient.Regist(Header.C,(b,s) =>
+        MessageHandlerClient.Regist(Header.Csc,(b,s) =>
         {
             int index = MessageReader.BodyIndexStart(s);
             int invalidIndex = MessageReader.BodyIndexInvalid(s);
@@ -61,7 +61,7 @@ public class EnsClientEventRegister
     protected static void Client_E()
     {
         //事件
-        MessageHandlerClient.Regist(Header.E, (b,s) =>
+        MessageHandlerClient.Regist(Header.Esc, (b,s) =>
         {
             int index = MessageReader.BodyIndexStart(s);
             int invalidIndex = MessageReader.BodyIndexInvalid(s);
@@ -74,7 +74,7 @@ public class EnsClientEventRegister
     }
     protected static void Client_H()
     {
-        MessageHandlerClient.Regist(Header.H,(b,s) =>
+        MessageHandlerClient.Regist(Header.Hsc,(b,s) =>
         {
             int index = MessageReader.BodyIndexStart(s);
             int invalidIndex = MessageReader.BodyIndexInvalid(s);
@@ -85,14 +85,14 @@ public class EnsClientEventRegister
     }
     protected static void Client_D()
     {
-        MessageHandlerClient.Regist(Header.D,(b,s) =>
+        MessageHandlerClient.Regist(Header.Dsc,(b,s) =>
         {
             EnsInstance.Corr.ShutDown();
         });
     }
     protected static void Client_A()
     {
-        MessageHandlerClient.Regist(Header.A,(b,s) =>
+        MessageHandlerClient.Regist(Header.Asc,(b,s) =>
         {
             int index = MessageReader.BodyIndexStart(s);
             int invalidIndex = MessageReader.BodyIndexInvalid(s);
@@ -102,7 +102,7 @@ public class EnsClientEventRegister
     }
     protected static void Client_F()
     {
-        MessageHandlerClient.Regist(Header.F,(b,s) =>
+        MessageHandlerClient.Regist(Header.Fsc,(b,s) =>
         {
             int indexStart = MessageReader.BodyIndexStart(s);
             int invalidIndex = MessageReader.BodyIndexInvalid(s);
@@ -122,7 +122,7 @@ public class EnsClientEventRegister
     }
     protected static void Client_f()
     {
-        MessageHandlerClient.Regist(Header.f,(b, s) =>
+        MessageHandlerClient.Regist(Header.fsc,(b, s) =>
         {
             int indexStart = MessageReader.BodyIndexStart(s);
             int invalidIndex = MessageReader.BodyIndexInvalid(s);
@@ -136,7 +136,7 @@ public class EnsClientEventRegister
     }
     protected static void Client_Q()
     {
-        MessageHandlerClient.Regist(Header.Q,(b,s) =>
+        MessageHandlerClient.Regist(Header.Qsc,(b,s) =>
         {
             int index = MessageReader.BodyIndexStart(s);
             int invalidIndex = MessageReader.BodyIndexInvalid(s);
@@ -147,14 +147,14 @@ public class EnsClientEventRegister
     }
     protected static void Client_R()
     {
-        MessageHandlerClient.Regist(Header.R, (b,s) =>
+        MessageHandlerClient.Regist(Header.Rsc, (b,s) =>
         {
             Ens.Request.Client.ExitRoom.OnRecvReply?.Invoke();
         });
     }
     protected static void Client_M()
     {
-        MessageHandlerClient.Regist(Header.M, (b, s) =>
+        MessageHandlerClient.Regist(Header.Msc, (b, s) =>
         {
             int index = MessageReader.BodyIndexStart(s);
             int invalidIndex = MessageReader.BodyIndexInvalid(s);
@@ -165,7 +165,7 @@ public class EnsClientEventRegister
     }
     protected static void Client_N()
     {
-        MessageHandlerClient.Regist(Header.N, (b, s) =>
+        MessageHandlerClient.Regist(Header.Nsc, (b, s) =>
         {
             int index = MessageReader.BodyIndexStart(s);
             int invalidIndex = MessageReader.BodyIndexInvalid(s);

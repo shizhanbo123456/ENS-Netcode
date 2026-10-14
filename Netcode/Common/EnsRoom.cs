@@ -45,17 +45,17 @@ public class EnsRoom
         conn.room = this;
         E_EventMessageWriter.instance.b = 0x01;
         E_EventMessageWriter.instance.connId = conn.ClientId;
-        Broadcast(conn.ClientId, Header.E, Delivery.Reliable, E_EventMessageWriter.instance);
+        Broadcast(conn.ClientId, Header.Esc, Delivery.Reliable, E_EventMessageWriter.instance);
         if (CurrentAuthorityAt == -1)
         {
             CurrentAuthorityAt = conn.ClientId;
             BoolWriter.instance.target = true;
-            conn.Send(Header.A, Delivery.Reliable, BoolWriter.instance);
+            conn.Send(Header.Asc, Delivery.Reliable, BoolWriter.instance);
         }
         else
         {
             BoolWriter.instance.target = false;
-            conn.Send(Header.A, Delivery.Reliable, BoolWriter.instance);
+            conn.Send(Header.Asc, Delivery.Reliable, BoolWriter.instance);
         }
     }
     protected class BoolWriter : MessageWriter
@@ -92,7 +92,7 @@ public class EnsRoom
         {
             E_EventMessageWriter.instance.b = 0x02;
             E_EventMessageWriter.instance.connId = conn.ClientId;
-            Broadcast(conn.ClientId, Header.E, Delivery.Reliable,E_EventMessageWriter.instance);
+            Broadcast(conn.ClientId, Header.Esc, Delivery.Reliable,E_EventMessageWriter.instance);
         }
     }
     protected class E_EventMessageWriter:MessageWriter
@@ -126,12 +126,12 @@ public class EnsRoom
         {
             var conn = ClientConnections[CurrentAuthorityAt];
             BoolWriter.instance.target = false;
-            conn.Send(Header.A, Delivery.Reliable, BoolWriter.instance);
+            conn.Send(Header.Asc, Delivery.Reliable, BoolWriter.instance);
         }
         CurrentAuthorityAt= clientId;
         var c = ClientConnections[CurrentAuthorityAt];
         BoolWriter.instance.target = true;
-        c.Send(Header.A, Delivery.Reliable, BoolWriter.instance);
+        c.Send(Header.Asc, Delivery.Reliable, BoolWriter.instance);
     }
     protected void ConnectionSend(EnsConnection conn,byte messageType, Delivery delivery, MessageWriter writer = null)
     {
@@ -160,7 +160,7 @@ public class EnsRoom
     }
     public virtual void ShutDown()
     {
-        Broadcast(Header.R, Delivery.Reliable, null);
+        Broadcast(Header.Rsc, Delivery.Reliable, null);
         EnsRoomManager.Instance.rooms.Remove(RoomId);
         foreach (var i in ClientConnections.Values) i.room = null;
         ClientConnections.Clear();
@@ -176,7 +176,7 @@ public class EnsRoom
         {
             Writer.instance.t_type = header;
             Writer.instance.t_content = content;
-            EnsInstance.Corr.Client.Send(Header.N, delivery, Writer.instance);
+            EnsInstance.Corr.Client.Send(Header.Ncs, delivery, Writer.instance);
         }
         else
         {

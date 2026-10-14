@@ -5,7 +5,7 @@ namespace Ens.ProtoFormat
     //Q 服务器接收
     public struct MessageBody_Q_CS
     {
-        public byte messageHeader => Header.Q;
+        public byte messageHeader => Header.Qcs;
         public ushort delivery;
         public string header;
         public string content;
@@ -26,7 +26,7 @@ namespace Ens.ProtoFormat
         {
             if (data.Length - indexStart < 3 + 2) throw new Exception("反序列化失败：剩余数据字节数不足");
             byte msgHeader = ByteSerializer.Deserialize(data, ref indexStart, invalidIndex);
-            if (msgHeader != Header.Q) throw new Exception($"消息类型不匹配：期望{Header.Q}，实际{msgHeader}");
+            if (msgHeader != Header.Qcs) throw new Exception($"消息类型不匹配：期望{Header.Qcs}，实际{msgHeader}");
             ushort delivery = UshortSerializer.Deserialize(data, ref indexStart, invalidIndex);
             string header = StringSerializer.Deserialize(data, ref indexStart, invalidIndex);
             string content = StringSerializer.Deserialize(data, ref indexStart, invalidIndex);

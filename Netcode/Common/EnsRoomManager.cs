@@ -86,7 +86,7 @@ public class EnsRoomManager
         {
             Writer.instance.t_type = header;
             Writer.instance.t_content = content;
-            conn.Send(Header.M, delivery, Writer.instance);
+            conn.Send(Header.Msc, delivery, Writer.instance);
         }
         else
         {

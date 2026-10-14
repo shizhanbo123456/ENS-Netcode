@@ -32,7 +32,7 @@ public class ClientRoomEventCenter
         {
             Writer.instance.t_type = header;
             Writer.instance.t_content = content;
-            EnsInstance.Corr.Client.Send(Header.N, delivery, Writer.instance);
+            EnsInstance.Corr.Client.Send(Header.Ncs, delivery, Writer.instance);
         }
         else
         {
@@ -95,7 +95,7 @@ public class ClientRoomManagerEventCenter
         {
             Writer.instance.t_type = header;
             Writer.instance.t_content = content;
-            EnsInstance.Corr.Client.Send(Header.M, delivery, Writer.instance);
+            EnsInstance.Corr.Client.Send(Header.Mcs, delivery, Writer.instance);
         }
         else
         {

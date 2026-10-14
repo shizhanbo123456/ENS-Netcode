@@ -119,7 +119,7 @@ public abstract class EnsBehaviour : MonoBehaviour
         Buffer.BlockCopy(EnsTemporaryBuffer.bytes, 0, Writer.instance.body, 0, EnsTemporaryBuffer.length);
         Writer.instance.length = EnsTemporaryBuffer.length;
         //·¢ËÍ×Ö½Ú
-        EnsInstance.Corr.Client.Send(Header.F,delivery, Writer.instance);
+        EnsInstance.Corr.Client.Send(Header.Fcs,delivery, Writer.instance);
     }
     private class Writer : MessageWriter
     {

@@ -5,7 +5,7 @@ namespace Ens.ProtoFormat
     //f 服务器接收 创建物体
     public struct MessageBody_f_CS
     {
-        public byte messageHeader => Header.f;
+        public byte messageHeader => Header.fcs;
         public ushort delivery;
         public short sendto;
         public bool spawnMode;//false:用behaviourCount; true:用idStart
@@ -33,7 +33,7 @@ namespace Ens.ProtoFormat
         {
             if (data.Length - indexStart < 3 + 8) throw new Exception("反序列化失败：剩余数据字节数不足");
             byte msgHeader = ByteSerializer.Deserialize(data, ref indexStart, invalidIndex);
-            if (msgHeader != Header.f) throw new Exception($"消息类型不匹配：期望{Header.f}，实际{msgHeader}");
+            if (msgHeader != Header.fcs) throw new Exception($"消息类型不匹配：期望{Header.fcs}，实际{msgHeader}");
             ushort delivery = UshortSerializer.Deserialize(data, ref indexStart, invalidIndex);
             short sendto = ShortSerializer.Deserialize(data, ref indexStart, invalidIndex);
             bool spawnMode = BoolSerializer.Deserialize(data, ref indexStart, invalidIndex);

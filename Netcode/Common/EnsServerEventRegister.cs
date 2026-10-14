@@ -41,12 +41,12 @@ public class EnsServerEventRegister
     protected static void Server_H()
     {
         //回显客户端时间戳，由客户端自行换算延迟
-        MessageHandlerServer.Regist(Header.H,(conn, b, s) =>
+        MessageHandlerServer.Regist(Header.Hcs,(conn, b, s) =>
         {
             int index = MessageReader.BodyIndexStart(s);
             int invalidIndex=MessageReader.BodyIndexInvalid(s);
             H_MessageWriter.instance.clientMillisecond = IntSerializer.Deserialize(b, ref index, invalidIndex);
-            conn.Send(Header.H, Delivery.Unreliable, H_MessageWriter.instance);
+            conn.Send(Header.Hsc, Delivery.Unreliable, H_MessageWriter.instance);
         });
     }
     private class H_MessageWriter : MessageWriter
@@ -73,7 +73,7 @@ public class EnsServerEventRegister
     }
     protected static void Server_D()
     {
-        MessageHandlerServer.Regist(Header.D,(conn, b, s) =>
+        MessageHandlerServer.Regist(Header.Dcs,(conn, b, s) =>
         {
             conn.ShutDown();
         });
@@ -81,7 +81,7 @@ public class EnsServerEventRegister
 
     protected static void Server_A()
     {
-        MessageHandlerServer.Regist(Header.A,(conn, b, s) =>
+        MessageHandlerServer.Regist(Header.Acs,(conn, b, s) =>
         {
             if (conn.room == null) return;
             int index = MessageReader.BodyIndexStart(s);
@@ -125,7 +125,7 @@ public class EnsServerEventRegister
     }
     protected static void Server_F()
     {
-        MessageHandlerServer.Regist(Header.F,(conn, b, s) =>
+        MessageHandlerServer.Regist(Header.Fcs,(conn, b, s) =>
         {
             if (conn.room == null) return;
             byte messageType = MessageReader.Header(b, s);
@@ -206,7 +206,7 @@ public class EnsServerEventRegister
     protected static void Server_f()
     {
         //物体Id同步
-        MessageHandlerServer.Regist(Header.f,(conn, b, s) =>
+        MessageHandlerServer.Regist(Header.fcs,(conn, b, s) =>
         {
             if (conn.room == null) return;
             byte messageType = MessageReader.Header(b, s);
@@ -274,7 +274,7 @@ public class EnsServerEventRegister
     }
     protected static void Server_Q()
     {
-        MessageHandlerServer.Regist(Header.Q,(conn, b, s) =>
+        MessageHandlerServer.Regist(Header.Qcs,(conn, b, s) =>
         {
             int index = MessageReader.BodyIndexStart(s);
             int invalidIndex = MessageReader.BodyIndexInvalid(s);
@@ -287,12 +287,12 @@ public class EnsServerEventRegister
                 return;
             }
             Q_MessageWriter.instance.t_content = reply;
-            conn.Send(Header.Q, Delivery.Reliable, Q_MessageWriter.instance);
+            conn.Send(Header.Qsc, Delivery.Reliable, Q_MessageWriter.instance);
         });
     }
     protected static void Server_M()
     {
-        MessageHandlerServer.Regist(Header.M, (conn,b, s) =>
+        MessageHandlerServer.Regist(Header.Mcs, (conn,b, s) =>
         {
             int index = MessageReader.BodyIndexStart(s);
             int invalidIndex = MessageReader.BodyIndexInvalid(s);
@@ -303,7 +303,7 @@ public class EnsServerEventRegister
     }
     protected static void Server_N()
     {
-        MessageHandlerServer.Regist(Header.N,(conn,b, s) =>
+        MessageHandlerServer.Regist(Header.Ncs,(conn,b, s) =>
         {
             if (conn.room == null) return;
             int index = MessageReader.BodyIndexStart(s);

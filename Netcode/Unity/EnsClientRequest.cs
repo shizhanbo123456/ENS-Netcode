@@ -52,7 +52,7 @@ public static class EnsClientRequest
         if (EnsInstance.Corr.Client == null) return false;
         Q_MessageWriter.Instance.t_header = header;
         Q_MessageWriter.Instance.t_content = content;
-        EnsInstance.Corr.Client.Send(Header.Q, Delivery.Reliable, Q_MessageWriter.Instance);
+        EnsInstance.Corr.Client.Send(Header.Qcs, Delivery.Reliable, Q_MessageWriter.Instance);
         ActiveRequestHeader.Add(header, Time.time + EnsInstance.ReliableKeyExistTime + 1);
         return true;
     }

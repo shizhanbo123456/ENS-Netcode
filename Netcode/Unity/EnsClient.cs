@@ -65,7 +65,7 @@ internal class EnsClient:DataTransportBase
     protected void SendHeartbeat()
     {
         hbSendTime = Time.time + EnsInstance.HeartbeatMsgInterval;
-        Send(Header.H, Delivery.Unreliable, HeartBeatMessageWriter.instance);
+        Send(Header.Hcs, Delivery.Unreliable, HeartBeatMessageWriter.instance);
     }
     internal override void Update()
     {
@@ -123,7 +123,7 @@ internal class EnsClient:DataTransportBase
         {
             if (client != null && client.Initialized && !client.Cancelled)
             {
-                Send(Header.D, Delivery.Unreliable);
+                Send(Header.Dcs, Delivery.Unreliable);
                 client.SendBuffer?.Flush();
             }
         }

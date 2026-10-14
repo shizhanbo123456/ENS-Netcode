@@ -5,7 +5,7 @@ namespace Ens.ProtoFormat
     //F 服务器接收 函数调用
     public struct MessageBody_F_CS
     {
-        public byte messageHeader => Header.F;
+        public byte messageHeader => Header.Fcs;
         public ushort delivery;
         public short NOMObjectId;
         public byte func;
@@ -34,7 +34,7 @@ namespace Ens.ProtoFormat
         {
             if (data.Length - indexStart < 3 + 2 + 1 + 1 + 2) throw new Exception("反序列化失败：剩余数据字节数不足");
             byte msgHeader = ByteSerializer.Deserialize(data, ref indexStart, invalidIndex);
-            if (msgHeader != Header.F) throw new Exception($"消息类型不匹配：期望{Header.F}，实际{msgHeader}");
+            if (msgHeader != Header.Fcs) throw new Exception($"消息类型不匹配：期望{Header.Fcs}，实际{msgHeader}");
             ushort delivery = UshortSerializer.Deserialize(data, ref indexStart, invalidIndex);
             short NOMObjectId = ShortSerializer.Deserialize(data, ref indexStart, invalidIndex);
             byte func = ByteSerializer.Deserialize(data, ref indexStart, invalidIndex);

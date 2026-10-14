@@ -28,7 +28,7 @@ public class EnsConnection:DataTransportBase
         KeyLibrary = new KeyLibrary(Connection.SendBuffer, DeliverySource);
 
         ClientIdWriter.instance.currentClientId = ClientId;
-        Send(Header.C, Delivery.Reliable, ClientIdWriter.instance);
+        Send(Header.Csc, Delivery.Reliable, ClientIdWriter.instance);
     }
     private class ClientIdWriter : MessageWriter
     {
@@ -106,7 +106,7 @@ public class EnsConnection:DataTransportBase
             if (connection != null && connection.Initialized && !connection.Cancelled)
             {
                 // _on 已关闭，直接调用底层封包方法发送最后一个断联通知。
-                DataTransportBase.Send(connection.SendBuffer, Header.D,
+                DataTransportBase.Send(connection.SendBuffer, Header.Dsc,
                     DeliverySource.DeliveryToId(Delivery.Unreliable));
                 connection.SendBuffer.Flush();
             }

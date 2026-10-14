@@ -5,7 +5,7 @@ namespace Ens.ProtoFormat
     //C 客户端接收 分配Id
     public struct MessageBody_C_SC
     {
-        public byte messageHeader => Header.C;
+        public byte messageHeader => Header.Csc;
         public ushort delivery;
         public short clientId;
     }
@@ -24,7 +24,7 @@ namespace Ens.ProtoFormat
         {
             if (data.Length - indexStart < 3 + 2) throw new Exception("反序列化失败：剩余数据字节数不足");
             byte msgHeader = ByteSerializer.Deserialize(data, ref indexStart, invalidIndex);
-            if (msgHeader != Header.C) throw new Exception($"消息类型不匹配：期望{Header.C}，实际{msgHeader}");
+            if (msgHeader != Header.Csc) throw new Exception($"消息类型不匹配：期望{Header.Csc}，实际{msgHeader}");
             ushort delivery = UshortSerializer.Deserialize(data, ref indexStart, invalidIndex);
             short clientId = ShortSerializer.Deserialize(data, ref indexStart, invalidIndex);
             if (indexStart > invalidIndex) throw new Exception("下标越界");
