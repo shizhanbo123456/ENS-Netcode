@@ -69,6 +69,24 @@ public sealed class BigBitField : IDisposable
         return bytes;
     }
 
+    // 把载荷写进调用方缓冲（与 xxxSerializer.Serialize 同约定）：空间不足时不写任何字节、indexStart 不变并返回 false；
+    // 成功则写入 payloadBytes 个字节并推进 indexStart；空位域不占字节、返回 true。
+    public bool ToBytes(byte[] dest, ref int indexStart)
+    {
+        if (_buf == null) throw new ObjectDisposedException(nameof(BigBitField));
+        if (dest == null || indexStart < 0 || indexStart > dest.Length) return false;
+        if (_count == 0) return true;
+        int len = (_count >> 3) + 1;
+        if (dest.Length - indexStart < len) return false; // 空间不足：不写、不推进
+        int dataBytes = (_count + 7) >> 3;
+        Array.Copy(_buf, 0, dest, indexStart, dataBytes);
+        int mb = _count >> 3;
+        if (mb == dataBytes) dest[indexStart + mb] = 0; // Count 是 8 的倍数时标识位独占一字节，先清掉旧值
+        dest[indexStart + mb] |= (byte)(1 << (_count & 7));
+        indexStart += len;
+        return true;
+    }
+
     // 从载荷还原（与 ToBytes 配对）：标识位 = 最高 1 位，往上找第一个非 0 字节即可；全 0 载荷还原为空位域
     public static BigBitField FromBytes(byte[] bytes)
     {
