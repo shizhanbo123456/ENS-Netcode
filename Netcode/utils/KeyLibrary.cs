@@ -9,7 +9,6 @@ internal class KeyLibrary
     //Unreliable:发送一次，不等待回应
     //Strive:发送指定数量次，不等待回应，接收方会忽略因重发重复的消息
     //Reliable:发送多次，直至收到回复或超时，接收方会忽略因重发重复的消息
-    //OrderWise:发送多次，直至收到回复或超时，接收方会忽略因重发重复的消息。只会发送储存的未确认的最早记录的此类消息，收到回复或超时后才会发送下一个
 
     public enum KeyState
     {
@@ -24,10 +23,11 @@ internal class KeyLibrary
 
         public byte messageType;
         public ushort delivery;
-        public MessageWriter writer;
+        public byte[] body;//已序列化好的完整包字节
+        public int bodyLength;
 
         private StriveKey() { }
-        public static StriveKey Get(byte messageType, ushort delivery, MessageWriter writer)
+        public static StriveKey Get(byte messageType, ushort delivery, byte[] body, int bodyLength)
         {
             var k = Pool.Get();
             k.NextSendTime = EnsInstance.StriveKeySendInterval+Time.time;
@@ -35,12 +35,15 @@ internal class KeyLibrary
 
             k.messageType = messageType;
             k.delivery = delivery;
-            k.writer = writer;
+            k.body = body;
+            k.bodyLength = bodyLength;
 
             return k;
         }
         public static void Return(StriveKey key)
         {
+            BytesPool.ReturnBuffer(key.body);
+            key.body = null;
             Pool.Return(key);
         }
     }
@@ -54,10 +57,11 @@ internal class KeyLibrary
 
         public byte messageType;
         public ushort delivery;
-        public MessageWriter writer;
+        public byte[] body;//已序列化好的完整包字节
+        public int bodyLength;
 
         protected ReliableKey() { }
-        public static ReliableKey Get(byte messageType,  ushort delivery, MessageWriter writer)
+        public static ReliableKey Get(byte messageType,  ushort delivery, byte[] body, int bodyLength)
         {
             var k = Pool.Get();
             k.State = KeyState.TobeConfirmed;
@@ -66,54 +70,21 @@ internal class KeyLibrary
 
             k.messageType = messageType;
             k.delivery = delivery;
-            k.writer = writer;
+            k.body = body;
+            k.bodyLength = bodyLength;
 
             return k;
         }
         public static void Return(ReliableKey key)
         {
-            Pool.Return(key);
-        }
-    }
-    private class OrderwiseKey
-    {
-        private static ObjectPool<OrderwiseKey> Pool = new(() => new());
-
-        public int OrderwiseIndex;
-
-        public KeyState State;
-        public float ToConfirmIntervalLeft;
-        public float ConfirmedExistingSource;
-
-        public byte messageType;
-        public ushort delivery;
-        public MessageWriter writer;
-        protected OrderwiseKey():base() { }
-        public static OrderwiseKey Get(int orderwiseIndex,byte messageType, ushort delivery, MessageWriter writer)
-        {
-            var k = Pool.Get();
-            k.OrderwiseIndex= orderwiseIndex;
-
-            k.State = KeyState.TobeConfirmed;
-            k.ToConfirmIntervalLeft = Time.time + EnsInstance.UnconfirmedKeySendInterval;
-            k.ConfirmedExistingSource = EnsInstance.ReliableKeyExistTime + Time.time;
-
-            k.messageType = messageType;
-            k.delivery = delivery;
-            k.writer = writer;
-
-            return k;
-        }
-        public static void Return(OrderwiseKey key)
-        {
+            BytesPool.ReturnBuffer(key.body);
+            key.body = null;
             Pool.Return(key);
         }
     }
     private Dictionary<ushort, StriveKey> StriveKeys = new();
     private Dictionary<ushort,ReliableKey> ReliableKeys = new();
-    private Dictionary<ushort,OrderwiseKey> OrderedKeys = new();
     private Dictionary<ushort, float> RespKeys = new();//value=EndTime
-    private int OrderedIndexSource = 0;
 
     private readonly SendBuffer buffer;
     private readonly DeliverySource deliverySource;
@@ -125,26 +96,25 @@ internal class KeyLibrary
     }
 
     /// <summary>
-    /// Add后自动发送，无需再发送
+    /// 登记需要重传的包：把刚写进发送缓冲的包字节拷一份留着重发；无需重传的语义直接返回
     /// </summary>
-    internal void OnSend(byte messageType, Delivery delivery, MessageWriter writer = null)
+    internal void Track(Delivery delivery, ushort deliveryKey, byte messageType, byte[] source, int bodyStart, int bodyLength)
     {
-        var d = deliverySource.DeliveryToId(delivery);
-        DataTransportBase.Send(buffer, messageType, d, writer);
-        if (delivery == Delivery.Unreliable)
+        if (delivery == Delivery.Unreliable) return;
+        byte[] body = BytesPool.GetBuffer(bodyLength);
+        Buffer.BlockCopy(source, bodyStart, body, 0, bodyLength);
+        if (delivery == Delivery.Strive)
         {
+            StriveKeys.Add(deliveryKey, StriveKey.Get(messageType, deliveryKey, body, bodyLength));
         }
-        else if (delivery == Delivery.Strive)
+        else if (delivery == Delivery.Reliable)
         {
-            StriveKeys.Add(d, StriveKey.Get(messageType, d, writer.Clone()));
-        }
-        else if(delivery== Delivery.Reliable)
-        {
-            ReliableKeys.Add(d, ReliableKey.Get(messageType, d, writer.Clone()));
+            ReliableKeys.Add(deliveryKey, ReliableKey.Get(messageType, deliveryKey, body, bodyLength));
         }
         else
         {
-            OrderedKeys.Add(d, OrderwiseKey.Get(OrderedIndexSource++, messageType, d, writer.Clone()));
+            BytesPool.ReturnBuffer(body);
+            Utils.Debug.LogError($"未知的传输类型：{delivery}");
         }
     }
     private static readonly HashSet<ushort>t_ToRemove=new();
@@ -162,13 +132,12 @@ internal class KeyLibrary
             {
                 if (Time.time > kvp.Value.NextSendTime)
                 {
-                    DataTransportBase.Send(buffer, kvp.Value.messageType, kvp.Value.delivery, kvp.Value.writer);
+                    DataTransportBase.Send(buffer, kvp.Value.body, kvp.Value.bodyLength);
                     kvp.Value.NextSendTime = Time.time + EnsInstance.StriveKeySendInterval;
                     kvp.Value.SendCountLeft-=1;
                     if (kvp.Value.SendCountLeft == 0)
                     {
                         t_ToRemove.Add(kvp.Key);
-                        kvp.Value.writer.Dispose();
                     }
                 }
             }
@@ -196,7 +165,7 @@ internal class KeyLibrary
                     {
                         k.ToConfirmIntervalLeft = Time.time + EnsInstance.UnconfirmedKeySendInterval;
 
-                        DataTransportBase.Send(buffer, k.messageType, k.delivery, k.writer);
+                        DataTransportBase.Send(buffer, k.body, k.bodyLength);
                     }
                 }
                 else if (k.State == KeyState.ConfirmedExisting)
@@ -206,7 +175,6 @@ internal class KeyLibrary
                 if (kvp.Value.State == KeyState.End)
                 {
                     t_ToRemove.Add(kvp.Key);
-                    kvp.Value.writer.Dispose();
                 }
             }
             foreach (var i in t_ToRemove)
@@ -216,62 +184,14 @@ internal class KeyLibrary
             }
             t_ToRemove.Clear();
         }
-        if (OrderedKeys.Count > 0)
-        {
-            ushort index = ushort.MaxValue;
-            foreach (var kvp in OrderedKeys)
-            {
-                if (kvp.Value.State == KeyState.ConfirmedExisting)
-                {
-                    if (Time.time > kvp.Value.ConfirmedExistingSource) 
-                        kvp.Value.State = KeyState.End;
-                }
-                else if (kvp.Value.State == KeyState.TobeConfirmed)
-                {
-                    if (index==ushort.MaxValue||kvp.Value.OrderwiseIndex < OrderedKeys[index].OrderwiseIndex) index = kvp.Key;
-                }
-            }
-            if(index!=ushort.MaxValue)
-            {
-                var k = OrderedKeys[index];
-                if (Time.time > k.ConfirmedExistingSource)
-                {
-                    k.State = KeyState.End;
-                    Utils.Debug.LogError($"信息未得到确认：type={k.messageType},delivery={k.delivery}");
-                }
-
-                if (Time.time > k.ToConfirmIntervalLeft)
-                {
-                    k.ToConfirmIntervalLeft = Time.time + EnsInstance.UnconfirmedKeySendInterval;
-
-                    DataTransportBase.Send(buffer, k.messageType, k.delivery, k.writer);
-                }
-            }
-
-            foreach (var kvp in OrderedKeys)
-                if (kvp.Value.State == KeyState.End)
-                {
-                    t_ToRemove.Add(kvp.Key);
-                    kvp.Value.writer.Dispose();
-                }
-            foreach (var i in t_ToRemove)
-            {
-                OrderedKeys.Remove(i,out var k);
-                OrderwiseKey.Return(k);
-            }
-            t_ToRemove.Clear();
-            if (OrderedKeys.Count == 0) OrderedIndexSource = 0;
-        }
     }
     internal void Clear()
     {
-        foreach (var v in StriveKeys.Values) { v.writer.Dispose(); StriveKey.Return(v); }
-        foreach (var v in ReliableKeys.Values) { v.writer.Dispose(); ReliableKey.Return(v); }
-        foreach (var v in OrderedKeys.Values) { v.writer.Dispose(); OrderwiseKey.Return(v); }
+        foreach (var v in StriveKeys.Values) { StriveKey.Return(v); }
+        foreach (var v in ReliableKeys.Values) { ReliableKey.Return(v); }
 
         StriveKeys.Clear();
         ReliableKeys.Clear();
-        OrderedKeys.Clear();
         RespKeys.Clear();
     }
     /// <summary>
@@ -298,13 +218,6 @@ internal class KeyLibrary
                     ReliableKeys[deliveryKey].State = KeyState.ConfirmedExisting;
                 }
             }
-            else if (OrderedKeys.ContainsKey(deliveryKey))
-            {
-                if (OrderedKeys[deliveryKey].State == KeyState.TobeConfirmed)
-                {
-                    OrderedKeys[deliveryKey].State = KeyState.ConfirmedExisting;
-                }
-            }
         }
         //非本地//////////////////////////////////////////////////////////////////B收到A的关键消息
         else
@@ -319,7 +232,7 @@ internal class KeyLibrary
                 skip = true;
             }
             if(deliveryType != Delivery.Strive)
-                DataTransportBase.Send(buffer, src[segment.StartIndex], DeliverySource.MessageToResponse(deliveryKey));
+                DataTransportBase.SendFrame(buffer, src[segment.StartIndex], DeliverySource.MessageToResponse(deliveryKey));
         }
     }
 }

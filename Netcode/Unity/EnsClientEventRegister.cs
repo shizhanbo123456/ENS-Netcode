@@ -1,3 +1,4 @@
+using Ens.ProtoFormat;
 using System;
 using Utils;
 using request = Ens.Request;
@@ -49,152 +50,103 @@ public class EnsClientEventRegister
     protected static void Client_C()
     {
         //成功连接
-        MessageHandlerClient.Regist(Header.C,(b,s) =>
+        MessageHandlerClient.Regist(Header.Csc,(b,s) =>
         {
-            int index = MessageReader.BodyIndexStart(s);
-            int invalidIndex = MessageReader.BodyIndexInvalid(s);
-            var i=ShortSerializer.Deserialize(b,ref index, invalidIndex);
-            EnsInstance.LocalClientId = i;
+            EnsInstance.LocalClientId = Pkt.scC.FromSegment(b, s).clientId;
             EnsInstance.OnServerConnect.Invoke();
         });
     }
     protected static void Client_E()
     {
         //事件
-        MessageHandlerClient.Regist(Header.E, (b,s) =>
+        MessageHandlerClient.Regist(Header.Esc, (b,s) =>
         {
-            int index = MessageReader.BodyIndexStart(s);
-            int invalidIndex = MessageReader.BodyIndexInvalid(s);
-            var e = ByteSerializer.Deserialize(b, ref index, invalidIndex);
-            var i = ShortSerializer.Deserialize(b, ref index, invalidIndex);
-            if (e == 1) EnsInstance.OnClientEnter?.Invoke(i);
-            else if (e == 2) EnsInstance.OnClientExit?.Invoke(i);
+            var body = Pkt.scE.FromSegment(b, s);
+            if (body.eventId == 1) EnsInstance.OnClientEnter?.Invoke(body.clientId);
+            else if (body.eventId == 2) EnsInstance.OnClientExit?.Invoke(body.clientId);
             else Debug.LogError("[E]存在错误的事件消息");
         });
     }
     protected static void Client_H()
     {
-        MessageHandlerClient.Regist(Header.H,(b,s) =>
+        MessageHandlerClient.Regist(Header.Hsc,(b,s) =>
         {
-            int index = MessageReader.BodyIndexStart(s);
-            int invalidIndex = MessageReader.BodyIndexInvalid(s);
-            H_MessageWriter.instance.t_serverTime = IntSerializer.Deserialize(b, ref index, invalidIndex);
-            var delay = IntSerializer.Deserialize(b, ref index, invalidIndex);
-            EnsInstance.LocalClientDelay = delay;
-            EnsInstance.Corr.Client?.Send(Header.H, Delivery.Unreliable,H_MessageWriter.instance);
+            //回包回显的是本机发送时刻，据此换算单程延迟
+            var body = Pkt.scH.FromSegment(b, s);
+            EnsInstance.LocalClientDelay = ((int)(Time.time * 1000) - body.clientMillisecond) / 2;
         });
-    }
-    internal class H_MessageWriter : MessageWriter
-    {
-        internal static H_MessageWriter instance = new();
-        internal int t_serverTime;
-
-        public int GetLength()
-        {
-            return sizeof(int);
-        }
-        public bool Write(SendBuffer b)
-        {
-            return IntSerializer.Serialize(t_serverTime, b.bytes, ref b.indexStart);
-        }
-        public MessageWriter Clone()
-        {
-            return new H_MessageWriter() { t_serverTime=t_serverTime};
-        }
-        public void Dispose()
-        {
-
-        }
     }
     protected static void Client_D()
     {
-        MessageHandlerClient.Regist(Header.D,(b,s) =>
+        MessageHandlerClient.Regist(Header.Dsc,(b,s) =>
         {
             EnsInstance.Corr.ShutDown();
         });
     }
     protected static void Client_A()
     {
-        MessageHandlerClient.Regist(Header.A,(b,s) =>
+        MessageHandlerClient.Regist(Header.Asc,(b,s) =>
         {
-            int index = MessageReader.BodyIndexStart(s);
-            int invalidIndex = MessageReader.BodyIndexInvalid(s);
-            EnsInstance.HasAuthority = BoolSerializer.Deserialize(b, ref index, invalidIndex);
+            EnsInstance.HasAuthority = Pkt.scA.FromSegment(b, s).authorityActive;
             EnsInstance.OnAuthorityChanged?.Invoke();
         });
     }
     protected static void Client_F()
     {
-        MessageHandlerClient.Regist(Header.F,(b,s) =>
+        MessageHandlerClient.Regist(Header.Fsc,(b,s) =>
         {
-            int indexStart = MessageReader.BodyIndexStart(s);
-            int invalidIndex = MessageReader.BodyIndexInvalid(s);
-            short id=ShortSerializer.Deserialize(b, ref indexStart, invalidIndex);
-            EnsBehaviour obj = EnsNetworkObjectManager.GetObject(id);
+            var body = Pkt.scF.FromSegment(b, s);
+            EnsBehaviour obj = EnsNetworkObjectManager.GetObject(body.NOMObjectId);
             if (obj == null)
             {
-                if (EnsInstance.DevelopmentDebug) Debug.LogError("未找到id为" + id + "的物体");
+                if (EnsInstance.DevelopmentDebug) Debug.LogError("未找到id为" + body.NOMObjectId + "的物体");
                 return;
             }
-            if(!obj.InvokeFunc(b, new Segment(s.StartIndex + MessageReader.BodyOffset+2, s.Length - MessageReader.BodyOffset-2)))//额外排除物体id部分
+            if(!obj.InvokeFunc(body.func, body.param.data, body.param.segment))
             {
                 Debug.LogError("检测到未注册的函数");
-                Utils.Debug.PrintBytes(b,s);
+                Utils.Debug.PrintBytes(body.param.data, body.param.segment);
             }
         });
     }
     protected static void Client_f()
     {
-        MessageHandlerClient.Regist(Header.f,(b, s) =>
+        MessageHandlerClient.Regist(Header.fsc,(b, s) =>
         {
-            int indexStart = MessageReader.BodyIndexStart(s);
-            int invalidIndex = MessageReader.BodyIndexInvalid(s);
-            bool t_spawnMode = BoolSerializer.Deserialize(b, ref indexStart, invalidIndex);
-            short t_spawnCollectionId = ShortSerializer.Deserialize(b, ref indexStart, invalidIndex);
-            string t_spawnParam = StringSerializer.Deserialize(b, ref indexStart, invalidIndex);
-            short t_spawnIdStart = ShortSerializer.Deserialize(b, ref indexStart, invalidIndex);
-            if(t_spawnMode)EnsInstance.EnsSpawner.RespawnCheckLocal(t_spawnCollectionId,t_spawnParam,t_spawnIdStart);
-            else EnsInstance.EnsSpawner.CreateLocal(t_spawnCollectionId,t_spawnParam,t_spawnIdStart);
+            var body = Pkt.scf.FromSegment(b, s);
+            if(body.spawnMode)EnsInstance.EnsSpawner.RespawnCheckLocal(body.collectionId, body.param, body.idStart);
+            else EnsInstance.EnsSpawner.CreateLocal(body.collectionId, body.param, body.idStart);
         });
     }
     protected static void Client_Q()
     {
-        MessageHandlerClient.Regist(Header.Q,(b,s) =>
+        MessageHandlerClient.Regist(Header.Qsc,(b,s) =>
         {
-            int index = MessageReader.BodyIndexStart(s);
-            int invalidIndex = MessageReader.BodyIndexInvalid(s);
-            string header = StringSerializer.Deserialize(b, ref index, invalidIndex);
-            string cotent = StringSerializer.Deserialize(b, ref index, invalidIndex);
-            EnsClientRequest.RecvReply(header, cotent);
+            var body = Pkt.scQ.FromSegment(b, s);
+            EnsClientRequest.RecvReply(body.header, body.content);
         });
     }
     protected static void Client_R()
     {
-        MessageHandlerClient.Regist(Header.R, (b,s) =>
+        MessageHandlerClient.Regist(Header.Rsc, (b,s) =>
         {
             Ens.Request.Client.ExitRoom.OnRecvReply?.Invoke();
         });
     }
     protected static void Client_M()
     {
-        MessageHandlerClient.Regist(Header.M, (b, s) =>
+        MessageHandlerClient.Regist(Header.Msc, (b, s) =>
         {
-            int index = MessageReader.BodyIndexStart(s);
-            int invalidIndex = MessageReader.BodyIndexInvalid(s);
-            int header = IntSerializer.Deserialize(b, ref index, invalidIndex);
-            string content = StringSerializer.Deserialize(b, ref index, invalidIndex);
-            ClientRoomManagerEventCenter.TrigEvent(header, content);
+            var body = Pkt.scM.FromSegment(b, s);
+            ClientRoomManagerEventCenter.TrigEvent(body.type, body.content);
         });
     }
     protected static void Client_N()
     {
-        MessageHandlerClient.Regist(Header.N, (b, s) =>
+        MessageHandlerClient.Regist(Header.Nsc, (b, s) =>
         {
-            int index = MessageReader.BodyIndexStart(s);
-            int invalidIndex = MessageReader.BodyIndexInvalid(s);
-            int header = IntSerializer.Deserialize(b, ref index, invalidIndex);
-            string content = StringSerializer.Deserialize(b, ref index, invalidIndex);
-            ClientRoomEventCenter.TrigEvent(header, content);
+            var body = Pkt.scN.FromSegment(b, s);
+            ClientRoomEventCenter.TrigEvent(body.type, body.content);
         });
     }
 

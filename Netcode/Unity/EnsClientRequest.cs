@@ -1,3 +1,4 @@
+using Ens.ProtoFormat;
 using Ens.Request;
 using System;
 using System.Collections.Generic;
@@ -21,38 +22,12 @@ public static class EnsClientRequest
             Requests.Add(key, request);
         }
     }
-    internal class Q_MessageWriter : MessageWriter
-    {
-        internal static Q_MessageWriter Instance = new();
-        internal string t_header;
-        internal string t_content;
-
-        public int GetLength()
-        {
-            return StringSerializer.GetLength(t_header) + StringSerializer.GetLength(t_content);
-        }
-        public bool Write(SendBuffer b)
-        {
-            return StringSerializer.Serialize(t_header, b.bytes, ref b.indexStart)
-                && StringSerializer.Serialize(t_content, b.bytes, ref b.indexStart);
-        }
-        public MessageWriter Clone()
-        {
-            return new Q_MessageWriter() {t_header=t_header,t_content=t_content };
-        }
-        public void Dispose()
-        {
-
-        }
-    }
     internal static bool SendRequest(string header,string content)
     {
         if (ActiveRequestHeader.ContainsKey(header)) return false;
         if (EnsInstance.Corr == null) return false;
         if (EnsInstance.Corr.Client == null) return false;
-        Q_MessageWriter.Instance.t_header = header;
-        Q_MessageWriter.Instance.t_content = content;
-        EnsInstance.Corr.Client.Send(Header.Q, Delivery.Reliable, Q_MessageWriter.Instance);
+        EnsInstance.Corr.Client.Send(Delivery.Reliable, new MessageBody_Q_CS { header = header, content = content }, Pkt.csQ);
         ActiveRequestHeader.Add(header, Time.time + EnsInstance.ReliableKeyExistTime + 1);
         return true;
     }

@@ -1,3 +1,4 @@
+using Ens.ProtoFormat;
 using ProtocolWrapper;
 using System;
 using System.Collections.Generic;
@@ -9,8 +10,22 @@ public abstract class DataTransportBase//具有信息收发功能
     internal float hbSendTime = Time.time + EnsInstance.HeartbeatMsgInterval;//new ReachTime(EnsInstance.HeartbeatMsgInterval, ReachTime.InitTimeFlagType.ReachAfter);
     internal DeliverySource DeliverySource = DeliverySource.Get();
 
+    /// <summary>
+    /// 需要重传的传输语义会把已发出去的字节存到这里；不需要重传的一端（Host/本地客户端）为 null
+    /// </summary>
+    internal KeyLibrary KeyLibrary;
 
-    internal abstract void Send(byte messageType,Delivery delivery, MessageWriter writer = null);
+    /// <summary>
+    /// 本端用于发送的缓冲区；不能发送时返回 null
+    /// </summary>
+    internal virtual SendBuffer GetSendBuffer() { return null; }
+
+    internal void Send<TBody>(Delivery delivery, TBody body, ProtoSender<TBody> proto) where TBody : struct
+    {
+        SendBuffer buffer = GetSendBuffer();
+        if (buffer == null || DeliverySource == null) return;
+        SendFrame(buffer, DeliverySource.DeliveryToId(delivery), body, proto, KeyLibrary, delivery);
+    }
     internal abstract void Update();
     internal abstract void FlushSendBuffer();
     internal virtual void ShutDown()
@@ -24,37 +39,72 @@ public abstract class DataTransportBase//具有信息收发功能
     internal abstract ProtocolBase GetProtocolBase();
 
 
-    internal static void Send(SendBuffer SendBuffer, byte messageType,ushort delivery, MessageWriter writer=null)
+    /// <summary>
+    /// 写一个完整包：[消息头][delivery] 由结构体自带，这里补长度尾和分隔符<br></br>
+    /// key 不为空且需要重传时，把刚写好的字节拷贝一份给 KeyLibrary
+    /// </summary>
+    internal static void SendFrame<TBody>(SendBuffer SendBuffer, ushort deliveryId, TBody body, ProtoSender<TBody> proto, KeyLibrary key = null, Delivery deliveryKind = Delivery.Unreliable) where TBody : struct
     {
-        int writerLength = writer!=null?writer.GetLength():0;
-        if (writerLength > 1400)
+        body = proto.SetDelivery(body, deliveryId);
+        int bodyLength = proto.GetLength(body);
+        if (bodyLength > 1400)
         {
             Debug.LogError("写入了超长数据");
             return;
         }
-        SendBuffer.RequireLength(writerLength+20);//预留更多空间，方便填充分隔符和消息尾
+        SendBuffer.RequireLength(bodyLength+20);//预留更多空间，方便填充分隔符和消息尾
+        int bytesStart = SendBuffer.indexStart;
+        if (!proto.Write(body, SendBuffer.bytes, ref SendBuffer.indexStart))
+        {
+            SendBuffer.indexStart = bytesStart;
+            Debug.LogError("写入失败：缓冲区空间不足");
+            return;
+        }
+        int length = SendBuffer.indexStart - bytesStart;
+#if UNITY_EDITOR
+        if (length != bodyLength)
+        {
+            Debug.LogError($"长度计算错误,理论{bodyLength}，实际{length}");
+        }
+#endif
+        ProtocolBase.LengthToBytes(length, out var a1, out var a2);
+        SendBuffer.bytes[SendBuffer.indexStart++] = a1;
+        SendBuffer.bytes[SendBuffer.indexStart++] = a2;
+        SendBuffer.AddSeparator();
+        if (key != null && deliveryKind != Delivery.Unreliable)
+        {
+            key.Track(deliveryKind, deliveryId, SendBuffer.bytes[bytesStart], SendBuffer.bytes, bytesStart, length);
+        }
+    }
+
+    /// <summary>
+    /// 写无 body 的包（如校验应答帧）
+    /// </summary>
+    internal static void SendFrame(SendBuffer SendBuffer, byte messageType, ushort delivery)
+    {
+        SendBuffer.RequireLength(3+20);
         int bytesStart = SendBuffer.indexStart;
         ByteSerializer.Serialize(messageType, SendBuffer.bytes, ref SendBuffer.indexStart);
         UshortSerializer.Serialize(delivery, SendBuffer.bytes, ref SendBuffer.indexStart);
-        if (writer != null)
-        {
-            var b = writer.Write(SendBuffer);
-            if (!b)
-            {
-                Debug.LogError($"writer:{writer.GetType()}长度计算错误");
-            }
-        }
         int length = SendBuffer.indexStart - bytesStart;
         ProtocolBase.LengthToBytes(length, out var a1, out var a2);
         SendBuffer.bytes[SendBuffer.indexStart++] = a1;
         SendBuffer.bytes[SendBuffer.indexStart++] = a2;
         SendBuffer.AddSeparator();
-#if UNITY_EDITOR
-        if (length - 3 != writerLength)
-        {
-            Debug.LogError($"writer:{writer.GetType()}长度计算错误,理论{writerLength}，实际{length-3}");
-        }
-#endif
+    }
+
+    /// <summary>
+    /// 直接发送已经序列化好的包字节（KeyLibrary 重传用）
+    /// </summary>
+    internal static void Send(SendBuffer SendBuffer, byte[] body, int length)
+    {
+        SendBuffer.RequireLength(length+20);
+        Buffer.BlockCopy(body, 0, SendBuffer.bytes, SendBuffer.indexStart, length);
+        SendBuffer.indexStart += length;
+        ProtocolBase.LengthToBytes(length, out var a1, out var a2);
+        SendBuffer.bytes[SendBuffer.indexStart++] = a1;
+        SendBuffer.bytes[SendBuffer.indexStart++] = a2;
+        SendBuffer.AddSeparator();
     }
 
 
@@ -184,13 +234,6 @@ public readonly struct Segment
     {
         return StartIndex + " " + Length;
     }
-}
-public interface MessageWriter
-{
-    int GetLength();
-    bool Write(SendBuffer buffer);
-    MessageWriter Clone();
-    void Dispose();
 }
 public struct MessageReader
 {

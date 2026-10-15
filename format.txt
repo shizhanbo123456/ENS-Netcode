@@ -1,6 +1,6 @@
 每次会把下列各语句合并，并用*分隔，一起发送
 
-(byte messageHeader)(ushort delivery)[body](2byte messageLength)
+(byte messageHeader)(ushort delivery){body}(2byte messageLength)
 messageLength有特殊编码
 messageType和messageLength都必定不包含Separator
 
@@ -9,17 +9,15 @@ Body部分消息结构
 
 E:
 >>客户端接收                事件
-(byte eventId)[short clientId]                                 //eventId    ==1 OnClientConnect  ==2 OnClientDisconnect
-                                                                            ==3 OnServerConnect  ==4 OnServerDisconnect
-                                                      //[E]3在C事件触发，[E]4在ShutDowm触发(超时/D事件/主动调用)
+(byte eventId)(short clientId)                                 //eventId    ==1 OnClientConnect  ==2 OnClientDisconnect
 
 C:
 >>客户端接收                分配Id
-(int Clientid)
+(short Clientid)
 
 A:
 >>服务器接收
-(int clientId)         设置房主权限
+(short clientId)         设置房主权限
 
 >>客户端接收
 (bool authorityActive)
@@ -27,16 +25,16 @@ A:
 
 F:
 >>服务器接收                函数调用
-(short NOMObjectId)(byte func)[string param](short target)
+(short NOMObjectId)(byte func)(bytes param)(short target)      //param为原始参数字节，长度与格式由 func 决定
 
 >>客户端接收                函数调用
-(short NOMObjectId)(byte func)[string param]
+(short NOMObjectId)(byte func)(bytes param)                    //param为原始参数字节，长度与格式由 func 决定
 
 
 f:
 >>服务器接收                创建物体
-(short sendto)(bool false)(short collectionId)(string param)(short behaviourCount)(short target)
-(short sendto)(bool true)(short collectionId)(string param)(short idStart)(short target)
+(short sendto)(bool false)(short collectionId)(string param)(short behaviourCount)
+(short sendto)(bool true)(short collectionId)(string param)(short idStart)
 
 >>客户端接收                创建物体
 (bool false)(short collectionId)(string param)(short idStart)
@@ -45,10 +43,10 @@ f:
 
 H:
 >>服务器接收                心跳检测
-(int millisecondInServerMsg)
+(int clientMillisecond)
 
 >>客户端接收                心跳检测
-(int serverMillisecond)(int delay)
+(int clientMillisecond)
 
 D
 >>服务器接收
@@ -73,10 +71,10 @@ Q:
 
 M:
 >>服务器接收
-(int type)(bytes content)
+(int type)(string content)
 
 >>客户端接收
-(int type)(bytes content)
+(int type)(string content)
 
 
 N:

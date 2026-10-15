@@ -98,12 +98,6 @@ public class EnsServer
                 ToRemove.Write(kvp.Key);
                 continue;
             }
-            if (Time.time > i.hbSendTime)
-            {
-                HeartBeatMessageWriter.instance.delay=i.delay;
-                i.Send(Header.H,  Delivery.Unreliable, HeartBeatMessageWriter.instance);
-                i.hbSendTime = Time.time + EnsInstance.HeartbeatMsgInterval;
-            }
             i.Update();
         }
         if (ToRemove.Count > 0)
@@ -119,29 +113,6 @@ public class EnsServer
     internal void FlushSendBuffer()
     {
         foreach (var i in ClientConnections.Values) i.FlushSendBuffer();
-    }
-    private class HeartBeatMessageWriter : MessageWriter
-    {
-        internal static HeartBeatMessageWriter instance=new();
-        internal int delay;
-
-        public int GetLength()
-        {
-            return sizeof(int) * 2;
-        }
-        public bool Write(SendBuffer buffer)
-        {
-            return IntSerializer.Serialize((int)(Utils.Time.time * 1000), buffer.bytes, ref buffer.indexStart)
-                && IntSerializer.Serialize(delay, buffer.bytes, ref buffer.indexStart);
-        }
-        public MessageWriter Clone()
-        {
-            return new HeartBeatMessageWriter() { delay=delay};
-        }
-        public void Dispose()
-        {
-
-        }
     }
     public virtual void ShutDown()
     {

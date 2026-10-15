@@ -1,3 +1,4 @@
+using Ens.ProtoFormat;
 using ProtocolWrapper;
 using System;
 using Utils;
@@ -7,8 +8,6 @@ using Utils;
 /// </summary>
 internal class EnsClient:DataTransportBase
 {
-    protected KeyLibrary KeyLibrary;
-
     private ProtocolBase Client;
 
     private float heartbeatSendTime;
@@ -30,15 +29,21 @@ internal class EnsClient:DataTransportBase
         if (KeyLibrary == null && Client != null && Client.Initialized)
             KeyLibrary = new KeyLibrary(Client.SendBuffer, DeliverySource);
     }
-    internal override void Send(byte messageType, Delivery delivery, MessageWriter writer = null)
+    internal override SendBuffer GetSendBuffer()
     {
         EnsureInitialized();
         if (Client == null || !Client.Initialized || KeyLibrary == null)
         {
             Debug.LogWarning("客户端初始化中");
-            return;
+            return null;
         }
-        KeyLibrary.OnSend(messageType, delivery, writer);
+        return Client.SendBuffer;
+    }
+    //发送心跳包(携带本机时间戳)
+    protected void SendHeartbeat()
+    {
+        hbSendTime = Time.time + EnsInstance.HeartbeatMsgInterval;
+        Send(Delivery.Unreliable, new MessageBody_H_CS { clientMillisecond = (int)(Time.time * 1000) }, Pkt.csH);
     }
     internal override void Update()
     {
@@ -56,8 +61,7 @@ internal class EnsClient:DataTransportBase
         }
         if (Time.time>hbSendTime)
         {
-            hbSendTime= Time.time+EnsInstance.HeartbeatMsgInterval;
-            Send(Header.H, Delivery.Unreliable);
+            SendHeartbeat();
         }
         if (!Client.Initialized || KeyLibrary == null) return;
         var buffer = Client.ReceiveBuffer;
@@ -97,7 +101,7 @@ internal class EnsClient:DataTransportBase
         {
             if (client != null && client.Initialized && !client.Cancelled)
             {
-                Send(Header.D, Delivery.Unreliable);
+                DataTransportBase.SendFrame(client.SendBuffer, DeliverySource.DeliveryToId(Delivery.Unreliable), default(MessageBody_D_CS), Pkt.csD);
                 client.SendBuffer?.Flush();
             }
         }

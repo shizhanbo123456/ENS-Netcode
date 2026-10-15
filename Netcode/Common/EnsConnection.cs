@@ -1,3 +1,4 @@
+using Ens.ProtoFormat;
 using ProtocolWrapper;
 using System;
 using System.Collections.Generic;
@@ -8,13 +9,10 @@ using System.Collections.Generic;
 public class EnsConnection:DataTransportBase
 {
     public short ClientId;
-    private KeyLibrary KeyLibrary;
     private ProtocolBase Connection;
     public EnsRoom room;
 
     private Action<EnsConnection> OnShutDown;
-
-    internal int delay = 20;//20ms
 
     protected bool _on;
     private bool shutdownStarted;
@@ -29,34 +27,12 @@ public class EnsConnection:DataTransportBase
 
         KeyLibrary = new KeyLibrary(Connection.SendBuffer, DeliverySource);
 
-        ClientIdWriter.instance.currentClientId = ClientId;
-        Send(Header.C, Delivery.Reliable, ClientIdWriter.instance);
+        Send(Delivery.Reliable, new MessageBody_C_SC { clientId = ClientId }, Pkt.scC);
     }
-    private class ClientIdWriter : MessageWriter
+    internal override SendBuffer GetSendBuffer()
     {
-        internal static ClientIdWriter instance = new();
-        internal short currentClientId;
-        public int GetLength()
-        {
-            return sizeof(short); // 等价 return 2;
-        }
-        public bool Write(SendBuffer buffer)
-        {
-            return ShortSerializer.Serialize(currentClientId, buffer.bytes, ref buffer.indexStart);
-        }
-        public MessageWriter Clone()
-        {
-            return new ClientIdWriter() { currentClientId=currentClientId};
-        }
-        public void Dispose()
-        {
-            
-        }
-    }
-    internal override void Send(byte messageType, Delivery delivery, MessageWriter writer = null)
-    {
-        if (!_on || KeyLibrary == null) return;
-        KeyLibrary.OnSend(messageType,delivery,writer);
+        if (!_on || KeyLibrary == null) return null;
+        return Connection.SendBuffer;
     }
     internal override void Update()
     {
@@ -107,9 +83,8 @@ public class EnsConnection:DataTransportBase
         {
             if (connection != null && connection.Initialized && !connection.Cancelled)
             {
-                // _on 已关闭，直接调用底层封包方法发送最后一个断联通知。
-                DataTransportBase.Send(connection.SendBuffer, Header.D,
-                    DeliverySource.DeliveryToId(Delivery.Unreliable));
+                // _on 已关闭，直接写帧发送最后一个断联通知。
+                DataTransportBase.SendFrame(connection.SendBuffer, DeliverySource.DeliveryToId(Delivery.Unreliable), default(MessageBody_D_SC), Pkt.scD);
                 connection.SendBuffer.Flush();
             }
         }
