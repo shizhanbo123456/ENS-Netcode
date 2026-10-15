@@ -356,6 +356,8 @@ class RpcCodeGenerator
                 codeBuilder.AppendLine($"        {serializer}.Serialize({paramNames[i]}, EnsTemporaryBuffer.bytes, ref EnsTemporaryBuffer.length);");
             }
 
+            // 与接收侧同名，同一 RPC 的收发次数合并计入同一个计数器
+            codeBuilder.AppendLine($"        EnsProfilerCounters.CountInvoke(\"{fullName} :{method.Identifier.Text}\");");
             codeBuilder.AppendLine("        Send(delivery, sendto);");
             codeBuilder.AppendLine("    }");
             codeBuilder.AppendLine();
